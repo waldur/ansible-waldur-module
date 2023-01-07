@@ -62,19 +62,19 @@ ansible-playbook \
 ## Contributing
 
 1. See general guidelines: <https://docs.ansible.com/ansible/latest/dev_guide/developing_modules_general.html>
-1. Install `pre-commit` and `tox`
+2. Install `pre-commit` and `tox`
 
    ```bash
    pip install tox pre-commit
    pre-commit install
    ```
 
-1. When new module is implemented, don't forget to update `py_modules` section in `setup.py` file.
-1. When new module is implemented, it should be covered with tests. Run tests using `tox`
+3. When new module is implemented, don't forget to update `py_modules` section in `setup.py` file.
+4. When new module is implemented, it should be covered with tests. Run tests using `tox`
 
    ```bash
    tox
    ```
 
-1. Module name should consist of three parts separated by underscore: `waldur`, plugin name,
+5. Module name should consist of three parts separated by underscore: `waldur`, plugin name,
    entity name. For example, `waldur_os_snapshot` refers to OpenStack (OS) as plugin name and snapshot as entity name.
