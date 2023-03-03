@@ -116,6 +116,38 @@ class SecurityGroupCreateTest(unittest.TestCase):
 
         self.check_successful_function_call()
 
+    def test_if_marketplace_resource_uuid_has_been_passed(self):
+        self.client.get_marketplace_resource.return_value = {
+            'scope': 'http://exapmle.com/api/model/tenant/'
+        }
+        self.client._get.return_value = {'uuid': 'tenant'}
+        self.module.params['rules'] = [
+            {
+                'from_port': '80',
+                'to_port': '80',
+                'remote_group': 'web',
+                'protocol': 'tcp',
+            }
+        ]
+
+        self.module.params.pop('tenant')
+        self.module.params['waldur_resource'] = 'waldur_resource_uuid'
+
+        self.client.get_security_group.side_effect = [WEB, None]
+
+        self.create_sg_call_kwargs['rules'].append(
+            {
+                'from_port': '80',
+                'to_port': '80',
+                'remote_group': 'api/123',
+                'protocol': 'tcp',
+                'direction': 'ingress',
+            }
+        )
+
+        self.check_successful_function_call()
+        self.client.get_marketplace_resource.assert_called_once()
+
     def test_group_creation_erred_with_invalid_params(self):
         self.module.params['rules'] = [
             {'from_port': '80', 'to_port': '80', 'protocol': 'tcp'}

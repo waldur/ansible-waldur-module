@@ -2,6 +2,7 @@
 # has to be a full import due to Ansible 2.0 compatibility
 from ipaddress import AddressValueError, IPv4Interface, IPv6Interface, NetmaskValueError
 
+from ansible.errors import AnsibleError
 from ansible.module_utils.basic import AnsibleModule
 from waldur_client import (
     WaldurClientException,
@@ -287,13 +288,29 @@ def compare_rules(local_rules, remote_rules):
     return True
 
 
+def get_tenant_uuid(client, waldur_resource_uuid):
+    response = client.get_marketplace_resource(waldur_resource_uuid)
+    scope_url = response['scope']
+    response = client._get(scope_url, valid_states=[200])
+    return response['uuid']
+
+
 def send_request_to_waldur(client, module):
     has_changed = False
+    tenant = module.params.get('tenant')
+    waldur_resource = module.params.get('waldur_resource')
+
+    if not tenant and not waldur_resource:
+        raise AnsibleError('Tenant or waldur_resource must be specified.')
+
+    if not tenant:
+        tenant = get_tenant_uuid(client, waldur_resource)
+
     project = module.params.get('project')
-    tenant = module.params['tenant']
     name = module.params['name']
     description = module.params.get('description') or ''
     rules = module.params['rules']
+
     for rule in rules:
         for item in ['from_port', 'to_port', 'protocol']:
             if item not in rule:
@@ -397,7 +414,8 @@ def main():
     fields = waldur_resource_argument_spec(
         rules=dict(type='list', required=False, default=[]),
         project=dict(type='str', required=False),
-        tenant=dict(type='str', required=True),
+        tenant=dict(type='str', required=False),
+        waldur_resource=dict(type='str', required=False),
     )
     module = AnsibleModule(
         argument_spec=fields,
