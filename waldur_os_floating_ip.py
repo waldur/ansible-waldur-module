@@ -87,6 +87,16 @@ EXAMPLES = '''
         instance: VM #3
         address: 10.30.201.19
         subnet: vpc-3-tm-sub-net
+
+- name: detach floating IP
+  hosts: localhost
+  tasks:
+    - name: detach floating IP
+      waldur_os_floating_ip:
+        access_token: b83557fd8e2066e98f27dee8f3b3433cdc4183ce
+        api_url: https://waldur.example.com:8000
+        instance: VM #3
+        state: absent
 '''
 
 
@@ -96,24 +106,29 @@ def main():
         floating_ips=dict(type='list'),
         address=dict(type='str'),
         subnet=dict(type='str'),
+        state=dict(default="present", choices=["absent", "present"]),
     )
     required_together = [['address', 'subnet']]
     mutually_exclusive = [['floating_ips', 'subnet'], ['floating_ips', 'address']]
-    required_one_of = mutually_exclusive
     module = AnsibleModule(
         argument_spec=fields,
         required_together=required_together,
-        required_one_of=required_one_of,
         mutually_exclusive=mutually_exclusive,
     )
 
+    present = module.params['state'] == 'present'
     client = waldur_client_from_module(module)
-    floating_ips = module.params.get('floating_ips') or [
-        {
-            'address': module.params['address'],
-            'subnet': module.params['subnet'],
-        }
-    ]
+
+    if present:
+        floating_ips = module.params.get('floating_ips') or [
+            {
+                'address': module.params['address'],
+                'subnet': module.params['subnet'],
+            }
+        ]
+    else:
+        floating_ips = []
+
     instance = module.params['instance']
 
     try:
