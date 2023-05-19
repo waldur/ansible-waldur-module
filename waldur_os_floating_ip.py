@@ -106,14 +106,16 @@ def main():
         floating_ips=dict(type='list'),
         address=dict(type='str'),
         subnet=dict(type='str'),
-        state=dict(default="present", choices=["absent", "present"]),
+        state=dict(default='present', choices=['absent', 'present']),
     )
     required_together = [['address', 'subnet']]
     mutually_exclusive = [['floating_ips', 'subnet'], ['floating_ips', 'address']]
+    required_if = [('state', 'present', ('floating_ips', 'subnet'))]
     module = AnsibleModule(
         argument_spec=fields,
         required_together=required_together,
         mutually_exclusive=mutually_exclusive,
+        required_if=required_if,
     )
 
     present = module.params['state'] == 'present'
