@@ -269,8 +269,25 @@ EXAMPLES = '''
 
 
 def compare_rules(local_rules, remote_rules):
+    all_fields = set()
+
+    for r in local_rules + remote_rules:
+        for field in r.keys():
+            all_fields.add(field)
+
+    def sort_key(item):
+        result = []
+        for key in all_fields:
+            result.append(str(item.get(key, '')))
+
+        return result
+
+    local_rules.sort(key=sort_key)
+    remote_rules.sort(key=sort_key)
+
     if len(local_rules) != len(remote_rules):
         return False
+
     for i in range(len(local_rules)):
         local_rule = local_rules[i]
         remote_rule = remote_rules[i].copy()
@@ -286,6 +303,16 @@ def compare_rules(local_rules, remote_rules):
             return False
 
     return True
+
+
+def compare_description(description_1, description_2):
+    if description_1 == description_2:
+        return True
+
+    if bool(description_1) == bool(description_2):
+        return True
+
+    return False
 
 
 def get_tenant_uuid(client, waldur_resource_uuid):
@@ -375,19 +402,19 @@ def send_request_to_waldur(client, module):
                 }
                 for rule in security_group['rules']
             ]
-            if security_group['description'] == description and compare_rules(
-                rules, rules_comp
-            ):
+            if compare_description(
+                security_group['description'], description
+            ) and compare_rules(rules, rules_comp):
                 has_changed = False
             else:
 
-                if security_group['description'] != description:
+                if not compare_description(security_group['description'], description):
                     client.update_security_group_description(
                         security_group, description
                     )
                     has_changed = True
 
-                if security_group['rules'] != rules:
+                if not compare_rules(rules, rules_comp):
                     client.update_security_group_rules(security_group, rules)
                     has_changed = True
         else:
