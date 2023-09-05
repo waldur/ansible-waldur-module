@@ -405,3 +405,44 @@ class SecurityGroupCreateTest(unittest.TestCase):
         self.assertFalse(
             waldur_os_security_group.compare_rules(local_rules, remote_rules)
         )
+
+
+class CompareRulesFunctionTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.rules_1 = {
+            'from_port': '80',
+            'to_port': '80',
+            'cidr': '192.168.0.0/28',
+            'protocol': 'tcp',
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+        }
+        self.rules_2 = {
+            'from_port': '100',
+            'to_port': '100',
+            'cidr': '192.168.0.0/28',
+            'protocol': 'tcp',
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+        }
+
+    def test_compare_rules(self):
+        self.assertTrue(
+            waldur_os_security_group.compare_rules([self.rules_1], [self.rules_1])
+        )
+
+        self.assertFalse(
+            waldur_os_security_group.compare_rules([self.rules_1], [self.rules_2])
+        )
+
+        self.assertTrue(
+            waldur_os_security_group.compare_rules(
+                [self.rules_1, self.rules_2], [self.rules_1, self.rules_2]
+            )
+        )
+
+        self.assertTrue(
+            waldur_os_security_group.compare_rules(
+                [self.rules_1, self.rules_2], [self.rules_2, self.rules_1]
+            )
+        )
