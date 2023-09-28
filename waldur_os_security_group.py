@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
+import copy
 from ipaddress import AddressValueError, IPv4Interface, IPv6Interface, NetmaskValueError
 
 from ansible.errors import AnsibleError
@@ -269,40 +270,30 @@ EXAMPLES = '''
 
 
 def compare_rules(local_rules, remote_rules):
-    all_fields = set()
+    remote_rules = remote_rules.copy()
 
-    for r in local_rules + remote_rules:
-        for field in r.keys():
-            all_fields.add(field)
+    for local_rule in local_rules:
+        try:
+            tmp_remote_rules = copy.deepcopy(remote_rules)
 
-    def sort_key(item):
-        result = []
-        for key in all_fields:
-            result.append(str(item.get(key, '')))
+            for rules in tmp_remote_rules:
+                if 'remote_group' in local_rule:
+                    if 'cidr' in rules:
+                        rules.pop('cidr')
+                    if 'ethertype' in rules:
+                        rules.pop('ethertype')
+                else:
+                    if 'remote_group' in rules:
+                        rules.pop('remote_group')
 
-        return result
-
-    local_rules.sort(key=sort_key)
-    remote_rules.sort(key=sort_key)
-
-    if len(local_rules) != len(remote_rules):
-        return False
-
-    for i in range(len(local_rules)):
-        local_rule = local_rules[i]
-        remote_rule = remote_rules[i].copy()
-        if 'remote_group' in local_rule:
-            if 'cidr' in remote_rule:
-                remote_rule.pop('cidr')
-            if 'ethertype' in remote_rule:
-                remote_rule.pop('ethertype')
-        else:
-            if 'remote_group' in remote_rule:
-                remote_rule.pop('remote_group')
-        if local_rule != remote_rule:
+            remote_rules.pop(tmp_remote_rules.index(local_rule))
+        except ValueError:
             return False
 
-    return True
+    if not len(remote_rules):
+        return True
+
+    return False
 
 
 def compare_description(description_1, description_2):

@@ -446,3 +446,51 @@ class CompareRulesFunctionTest(unittest.TestCase):
                 [self.rules_1, self.rules_2], [self.rules_2, self.rules_1]
             )
         )
+
+    def test_compare_rules_if_remote_group_passed(self):
+        local_1 = {
+            'from_port': '100',
+            'to_port': '100',
+            'cidr': '192.168.0.0/28',
+            'protocol': 'tcp',
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+        }
+        remote_1 = {
+            'from_port': '100',
+            'to_port': '100',
+            'cidr': '192.168.0.0/28',
+            'protocol': 'tcp',
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'remote_group': 'api/124',
+        }
+
+        self.assertTrue(waldur_os_security_group.compare_rules([local_1], [remote_1]))
+
+        local_2 = {
+            'from_port': '80',
+            'to_port': '80',
+            'protocol': 'tcp',
+            'direction': 'ingress',
+            'remote_group': 'api/124',
+        }
+        remote_2 = {
+            'from_port': '80',
+            'to_port': '80',
+            'cidr': '192.168.0.0/28',
+            'protocol': 'tcp',
+            'direction': 'ingress',
+            'ethertype': 'IPv4',
+            'remote_group': 'api/124',
+        }
+
+        self.assertTrue(waldur_os_security_group.compare_rules([local_2], [remote_2]))
+        self.assertTrue(
+            waldur_os_security_group.compare_rules(
+                [local_1, local_2], [remote_2, remote_1]
+            )
+        )
+
+        remote_2.pop('remote_group')
+        self.assertFalse(waldur_os_security_group.compare_rules([local_2], [remote_2]))
