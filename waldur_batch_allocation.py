@@ -79,8 +79,7 @@ def send_request_to_waldur(client, module):
     project, offering, plan, attributes = format_params(module.params)
 
     response = client.create_marketplace_order(project, offering, plan, attributes)
-    order_item = response['items'][0]
-    return order_item, True
+    return response, True
 
 
 def main():
@@ -98,11 +97,11 @@ def main():
     client = waldur_client_from_module(module)
 
     try:
-        order_item, has_changed = send_request_to_waldur(client, module)
+        order, has_changed = send_request_to_waldur(client, module)
     except WaldurClientException as e:
         module.fail_json(msg=str(e))
     else:
-        module.exit_json(order=order_item, changed=has_changed)
+        module.exit_json(order=order, changed=has_changed)
 
 
 if __name__ == '__main__':
