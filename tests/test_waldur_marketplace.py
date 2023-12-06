@@ -20,13 +20,9 @@ class OrderItemCreateTest(unittest.TestCase):
         module.check_mode = False
         self.module = module
 
-    def test_create_marketplace_order_item(
-        self, mock_ansible_module, mock_waldur_client
-    ):
+    def test_create_marketplace_order(self, mock_ansible_module, mock_waldur_client):
         client = mock.Mock()
-        client.create_marketplace_order.return_value = {
-            'items': [{'uuid': 'order_item_uuid'}]
-        }
+        client.create_marketplace_order.return_value = {'uuid': 'order_uuid'}
         _, has_changed = waldur_marketplace.send_request_to_waldur(client, self.module)
         client.create_marketplace_order.assert_called_once()
         self.assertTrue(has_changed)

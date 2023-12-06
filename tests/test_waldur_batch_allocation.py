@@ -26,9 +26,7 @@ class BatchAllocationMakingTest(unittest.TestCase):
 
     def test_create_batch_allocation(self, mock_ansible_module, mock_ansible_client):
         client = mock.Mock()
-        client.create_marketplace_order.return_value = {
-            'items': [{'uuid': 'order_item_uuid'}]
-        }
+        client.create_marketplace_order.return_value = {'uuid': 'order_uuid'}
         _, has_changed = waldur_batch_allocation.send_request_to_waldur(
             client, self.module
         )
