@@ -494,3 +494,20 @@ class CompareRulesFunctionTest(unittest.TestCase):
 
         remote_2.pop('remote_group')
         self.assertFalse(waldur_os_security_group.compare_rules([local_2], [remote_2]))
+
+
+class CompareDescriptionFunctionTest(unittest.TestCase):
+    def test_compare_description(self):
+        self.assertTrue(
+            waldur_os_security_group.compare_description("description", "description")
+        )
+
+        self.assertFalse(
+            waldur_os_security_group.compare_description(
+                "description", "new description"
+            )
+        )
+
+        self.assertTrue(waldur_os_security_group.compare_description("", "  "))
+
+        self.assertTrue(waldur_os_security_group.compare_description("", None))

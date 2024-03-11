@@ -297,10 +297,17 @@ def compare_rules(local_rules, remote_rules):
 
 
 def compare_description(description_1, description_2):
+    description_1 = (
+        description_1.strip() if isinstance(description_1, str) else description_1
+    )
+    description_2 = (
+        description_2.strip() if isinstance(description_2, str) else description_2
+    )
+
     if description_1 == description_2:
         return True
 
-    if bool(description_1) == bool(description_2):
+    if not bool(description_1) and not bool(description_2):
         return True
 
     return False
