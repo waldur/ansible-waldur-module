@@ -4,7 +4,7 @@ from setuptools import setup
 
 install_requires = [
     'requests>=2.6.0',
-    'python-waldur-client>=0.2.10',
+    'python-waldur-client>=0.3.3',
     'urllib3<2.0.0',
 ]
 
@@ -36,6 +36,8 @@ setup(
         'waldur_os_snapshot',
         'waldur_batch_allocation',
         'waldur_batch_offering',
+        'waldur_os_subnet',
+        'waldur_os_subnet_gather_facts',
     ],
     install_requires=install_requires,
     tests_require=tests_requires,
