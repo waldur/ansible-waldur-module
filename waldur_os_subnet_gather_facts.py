@@ -1,7 +1,11 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import WaldurClientException, waldur_client_from_module
+from waldur_client import (
+    WaldurClientException,
+    waldur_client_from_module,
+    waldur_full_argument_spec,
+)
 
 ANSIBLE_METADATA = {
     'metadata_version': '1.1',
@@ -71,9 +75,7 @@ def send_request_to_waldur(client, module):
 
 
 def main():
-    fields = dict(
-        api_url=dict(required=True, type='str'),
-        access_token=dict(required=True, type='str', no_log=True),
+    fields = waldur_full_argument_spec(
         subnet_uuid=dict(required=False, type='str'),
         tenant_uuid=dict(required=True, type='str'),
     )
