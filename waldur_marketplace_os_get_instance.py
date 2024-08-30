@@ -1,7 +1,11 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import WaldurClientException, waldur_client_from_module
+from waldur_client import (
+    WaldurClientException,
+    waldur_client_from_module,
+    waldur_full_argument_spec,
+)
 
 ANSIBLE_METADATA = {
     'metadata_version': '1.1',
@@ -54,12 +58,10 @@ EXAMPLES = '''
 
 def main():
     fields = {
-        'api_url': {'required': True, 'type': 'str'},
-        'access_token': {'required': True, 'type': 'str'},
         'name': {'required': True, 'type': 'str'},
         'project': {'required': False, 'type': 'str'},
     }
-    module = AnsibleModule(argument_spec=fields)
+    module = AnsibleModule(argument_spec=waldur_full_argument_spec(**fields))
 
     client = waldur_client_from_module(module)
     try:

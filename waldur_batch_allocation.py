@@ -1,7 +1,11 @@
 #!/usr/bin/python
 
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import WaldurClientException, waldur_client_from_module
+from waldur_client import (
+    WaldurClientException,
+    waldur_client_from_module,
+    waldur_full_argument_spec,
+)
 
 ANSIBLE_METADATA = {
     'metadata_version': '1.1',
@@ -84,15 +88,13 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = {
-        'api_url': {'required': True, 'type': 'str'},
-        'access_token': {'required': True, 'type': 'str'},
         'project': {'required': True, 'type': 'str'},
         'offering': {'required': True, 'type': 'str'},
         'plan': {'required': True, 'type': 'str'},
         'name': {'required': True, 'type': 'str'},
         'description': {'required': True, 'type': 'str'},
     }
-    module = AnsibleModule(argument_spec=fields)
+    module = AnsibleModule(argument_spec=waldur_full_argument_spec(**fields))
 
     client = waldur_client_from_module(module)
 
