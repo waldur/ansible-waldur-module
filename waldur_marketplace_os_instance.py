@@ -325,7 +325,7 @@ def send_request_to_waldur(client, module):
             if subnet:
                 if not isinstance(subnet, list):
                     subnet = [subnet]
-                instance_subnets = instance.get('internal_ips_set')
+                instance_subnets = instance.get('ports')
                 needed_update_subnets = False
 
                 for s in instance_subnets:
@@ -344,7 +344,7 @@ def send_request_to_waldur(client, module):
                             break
 
                 if needed_update_subnets:
-                    client.update_instance_internal_ips_set(
+                    client.update_instance_ports(
                         instance_uuid=instance['uuid'],
                         subnet_set=subnet,
                         wait=True,

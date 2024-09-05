@@ -27,7 +27,7 @@ class InstanceSubNetUpdateTest(unittest.TestCase):
         instance_uuid = '59e46d029a79473779915a22'
         client.get_instance_via_marketplace.return_value = {
             'uuid': instance_uuid,
-            'internal_ips_set': [
+            'ports': [
                 {
                     'subnet_name': 'Test subnet',
                     'subnet_uuid': '77e46d029a79473779915a22',
@@ -54,7 +54,7 @@ class InstanceSubNetUpdateTest(unittest.TestCase):
         _, has_changed = waldur_marketplace_os_instance.send_request_to_waldur(
             client, module
         )
-        client.update_instance_internal_ips_set.assert_called_once_with(
+        client.update_instance_ports.assert_called_once_with(
             instance_uuid=instance_uuid,
             subnet_set=self.subnets_set,
             interval=20,
@@ -68,7 +68,7 @@ class InstanceSubNetUpdateTest(unittest.TestCase):
         instance_uuid = '59e46d029a79473779915a22'
         client.get_instance_via_marketplace.return_value = {
             'uuid': instance_uuid,
-            'internal_ips_set': [],
+            'ports': [],
             'security_groups': [],
         }
 
@@ -88,7 +88,7 @@ class InstanceSubNetUpdateTest(unittest.TestCase):
         _, has_changed = waldur_marketplace_os_instance.send_request_to_waldur(
             client, module
         )
-        client.update_instance_internal_ips_set.assert_called_once_with(
+        client.update_instance_ports.assert_called_once_with(
             instance_uuid=instance_uuid,
             subnet_set=[self.subnets_set[0]],
             interval=20,
