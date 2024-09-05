@@ -4,7 +4,7 @@ from setuptools import setup
 
 install_requires = [
     'requests>=2.6.0',
-    'python-waldur-client>=0.3.3',
+    'python-waldur-client>=0.3.7',
     'urllib3<2.0.0',
 ]
 
