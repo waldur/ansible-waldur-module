@@ -8,12 +8,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_batch_allocation
 short_description: Creates an order for batch allocation
@@ -46,9 +46,9 @@ options:
     description:
       - The description of allocation
     required: true
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 ---
 - hosts: localhost
   gather_facts: no
@@ -62,19 +62,19 @@ EXAMPLES = '''
       plan: Plan name
       name: Sample name
       description: Sample description
-'''
+"""
 
 
 def format_params(params):
-    project = params['project']
-    offering = params['offering']
+    project = params["project"]
+    offering = params["offering"]
 
     # 'module.params' contains each fields key
     # regardless if it is mentioned in a playbook or not
 
-    plan = params['plan']
+    plan = params["plan"]
 
-    attributes = {'name': params['name'], 'description': params['description']}
+    attributes = {"name": params["name"], "description": params["description"]}
 
     return project, offering, plan, attributes
 
@@ -88,11 +88,11 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = {
-        'project': {'required': True, 'type': 'str'},
-        'offering': {'required': True, 'type': 'str'},
-        'plan': {'required': True, 'type': 'str'},
-        'name': {'required': True, 'type': 'str'},
-        'description': {'required': True, 'type': 'str'},
+        "project": {"required": True, "type": "str"},
+        "offering": {"required": True, "type": "str"},
+        "plan": {"required": True, "type": "str"},
+        "name": {"required": True, "type": "str"},
+        "description": {"required": True, "type": "str"},
     }
     module = AnsibleModule(argument_spec=waldur_full_argument_spec(**fields))
 
@@ -106,5 +106,5 @@ def main():
         module.exit_json(order=order, changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

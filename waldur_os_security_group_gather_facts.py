@@ -4,12 +4,12 @@ from ansible.module_utils.basic import AnsibleModule
 from waldur_client import WaldurClientException, waldur_client_from_module
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_security_group_gather_facts
 short_description: Get OpenStack tenant security group
@@ -37,9 +37,9 @@ options:
     description:
       - The name of the tenant.
     required: true
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: get security group
   hosts: localhost
   tasks:
@@ -58,12 +58,12 @@ EXAMPLES = '''
         access_token: b83557fd8e2066e98f27dee8f3b3433cdc4183ce
         api_url: https://waldur.example.com:8000/api
         tenant: VPC #1
-'''
+"""
 
 
 def send_request_to_waldur(client, module):
-    tenant = module.params['tenant']
-    name = module.params['name']
+    tenant = module.params["tenant"]
+    name = module.params["name"]
     if name:
         return [client.get_security_group(tenant, name)]
     else:
@@ -72,10 +72,10 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = dict(
-        api_url=dict(required=True, type='str'),
-        access_token=dict(required=True, type='str', no_log=True),
-        name=dict(type='str', required=False),
-        tenant=dict(type='str', required=True),
+        api_url=dict(required=True, type="str"),
+        access_token=dict(required=True, type="str", no_log=True),
+        name=dict(type="str", required=False),
+        tenant=dict(type="str", required=True),
     )
     module = AnsibleModule(argument_spec=fields)
 
@@ -86,9 +86,8 @@ def main():
     except WaldurClientException as e:
         module.fail_json(msg=str(e))
     else:
-
         module.exit_json(security_groups=security_groups)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -8,12 +8,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_instance_volume
 short_description: Attach and detach Volumes from OpenStack VMs
@@ -68,9 +68,9 @@ options:
     default: true
     description:
       - A boolean value that defines whether client has to wait until the operation is complete.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: attach volume to the instance
   hosts: localhost
   tasks:
@@ -93,18 +93,18 @@ EXAMPLES = '''
         project: database management
         volume: postgresql-data
         state: absent
-'''
+"""
 
 
 def send_request_to_waldur(client, module):
-    device = module.params['device']
-    instance = module.params['instance']
-    project = module.params['project']
-    state = module.params['state']
-    volume = module.params['volume']
-    wait = module.params['wait']
-    interval = module.params['interval']
-    timeout = module.params['timeout']
+    device = module.params["device"]
+    instance = module.params["instance"]
+    project = module.params["project"]
+    state = module.params["state"]
+    volume = module.params["volume"]
+    wait = module.params["wait"]
+    interval = module.params["interval"]
+    timeout = module.params["timeout"]
     params = dict(
         wait=wait,
         interval=interval,
@@ -113,49 +113,49 @@ def send_request_to_waldur(client, module):
 
     # Get volume by ID or name and project
     volume = client.get_volume(volume, project)
-    runtime_state = volume['runtime_state']
+    runtime_state = volume["runtime_state"]
 
-    if state == 'absent':
-        if runtime_state == 'available':
+    if state == "absent":
+        if runtime_state == "available":
             # Volume is already detached so there's nothing to do
             return False
-        elif runtime_state == 'in-use':
+        elif runtime_state == "in-use":
             # Volume should be detached
-            client.detach_volume(volume['uuid'], **params)
+            client.detach_volume(volume["uuid"], **params)
             return True
-    elif state == 'present':
+    elif state == "present":
         # Get instance by ID or name and project
         instance = client.get_instance(instance, project)
-        if runtime_state == 'in-use':
+        if runtime_state == "in-use":
             # Volume is already attached to target instance so there's nothing to do
-            if volume['instance'] == instance['url']:
+            if volume["instance"] == instance["url"]:
                 return False
             else:
                 # Volume is attached to another instance, so we should detach and attach
-                client.detach_volume(volume['uuid'])
-                client.attach_volume(volume['uuid'], instance['uuid'], device, **params)
+                client.detach_volume(volume["uuid"])
+                client.attach_volume(volume["uuid"], instance["uuid"], device, **params)
                 return True
-        elif runtime_state == 'available':
+        elif runtime_state == "available":
             # Volume should be attached to the instance
-            client.attach_volume(volume['uuid'], instance['uuid'], device, **params)
+            client.attach_volume(volume["uuid"], instance["uuid"], device, **params)
             return True
 
 
 def main():
     fields = waldur_full_argument_spec(
-        device=dict(type='int', default=None),
-        instance=dict(type='str', default=None),
-        project=dict(type='str', default=None),
-        state=dict(default='present', choices=['absent', 'present']),
-        volume=dict(type='str', required=True),
+        device=dict(type="int", default=None),
+        instance=dict(type="str", default=None),
+        project=dict(type="str", default=None),
+        state=dict(default="present", choices=["absent", "present"]),
+        volume=dict(type="str", required=True),
     )
     module = AnsibleModule(argument_spec=fields)
 
-    state = module.params['state']
-    instance = module.params['instance']
-    device = module.params['instance']
+    state = module.params["state"]
+    instance = module.params["instance"]
+    device = module.params["instance"]
 
-    if state == 'present':
+    if state == "present":
         if not instance:
             module.fail_json(
                 msg="Parameter 'instance' is required if state == 'present'"
@@ -174,5 +174,5 @@ def main():
         module.exit_json(changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

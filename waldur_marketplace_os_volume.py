@@ -10,12 +10,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_marketplace_os_volume
 short_description: Create/Update/Delete OpenStack volume via marketplace
@@ -79,9 +79,9 @@ options:
     default: true
     description:
       - A boolean value that defines whether client has to wait until the volume is provisioned.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: add volume
   hosts: localhost
   tasks:
@@ -117,45 +117,45 @@ EXAMPLES = '''
         name: test volume
         project: OpenStack Project
         description: do not delete this volume
-'''
+"""
 
 
 def send_request_to_waldur(client, module):
     has_changed = False
-    name = module.params['name']
-    project = module.params['project']
-    offering = module.params['offering']
-    size = module.params['size']
-    volume_type = module.params['type']
+    name = module.params["name"]
+    project = module.params["project"]
+    offering = module.params["offering"]
+    size = module.params["size"]
+    volume_type = module.params["type"]
 
     try:
         volume = client.get_volume_via_marketplace(name, project)
     except (ObjectDoesNotExist, MultipleObjectsReturned):
         volume = None
         pass
-    present = module.params['state'] == 'present'
+    present = module.params["state"] == "present"
     if volume:
         if present:
-            if volume['description'] != module.params.get('description'):
+            if volume["description"] != module.params.get("description"):
                 client.update_volume(
-                    volume, description=module.params.get('description')
+                    volume, description=module.params.get("description")
                 )
                 has_changed = True
         else:
-            client.delete_volume_via_marketplace(volume['uuid'])
+            client.delete_volume_via_marketplace(volume["uuid"])
             has_changed = True
     elif present:
         client.create_volume_via_marketplace(
-            name=module.params['name'],
+            name=module.params["name"],
             project=project,
             offering=offering,
             size=size,
             volume_type=volume_type,
-            description=module.params.get('description'),
-            tags=module.params.get('tags'),
-            wait=module.params['wait'],
-            interval=module.params['interval'],
-            timeout=module.params['timeout'],
+            description=module.params.get("description"),
+            tags=module.params.get("tags"),
+            wait=module.params["wait"],
+            interval=module.params["interval"],
+            timeout=module.params["timeout"],
         )
         has_changed = True
 
@@ -164,19 +164,19 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = waldur_resource_argument_spec(
-        project=dict(type='str', default=None),
-        offering=dict(type='str', default=None),
-        size=dict(type='int', default=None),
-        type=dict(type='str', default=None),
+        project=dict(type="str", default=None),
+        offering=dict(type="str", default=None),
+        size=dict(type="int", default=None),
+        type=dict(type="str", default=None),
     )
     module = AnsibleModule(argument_spec=fields)
 
-    state = module.params['state']
-    project = module.params['project']
-    offering = module.params['offering']
-    size = module.params['size']
+    state = module.params["state"]
+    project = module.params["project"]
+    offering = module.params["offering"]
+    size = module.params["size"]
 
-    if state == 'present':
+    if state == "present":
         if not project:
             module.fail_json(
                 msg="Parameter 'project' is required if state == 'present'"
@@ -198,5 +198,5 @@ def main():
         module.exit_json(changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

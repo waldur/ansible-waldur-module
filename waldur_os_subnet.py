@@ -10,12 +10,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_subnet
 short_description: The creation and management of OpenStack subnets
@@ -82,8 +82,8 @@ options:
     description:
       - Should the resource be present or absent
 
-'''
-EXAMPLES = '''
+"""
+EXAMPLES = """
 - name: Connect a subnet to a router in a network
   hosts: localhost
   tasks:
@@ -129,11 +129,10 @@ EXAMPLES = '''
         project: feline-suppliment-sourcer
         gateway_ip: 192.168.42.2
 
-'''
+"""
 
 
 def compare_fields(checked_fields, local_fields):
-
     try:
         field_diff = {
             k: checked_fields[k]
@@ -151,24 +150,24 @@ def compare_fields(checked_fields, local_fields):
 
 def send_request_to_waldur(client: WaldurClient, module):
     has_changed = False
-    subnet_uuid = module.params.get('subnet_uuid')
-    name = module.params.get('name')
-    tenant = module.params.get('tenant')
-    project = module.params.get('project')
-    network_uuid = module.params.get('network_uuid')
-    cidr = module.params.get('cidr')
-    gateway_ip = module.params.get('gateway_ip')
-    disable_gateway = module.params.get('disable_gateway')
-    allocation_pools = module.params.get('allocation_pools')
-    enable_dhcp = module.params.get('enable_dhcp')
-    dns_nameservers = module.params.get('dns_nameservers')
-    connect_subnet = module.params.get('connect_subnet')
-    disconnect_subnet = module.params.get('disconnect_subnet')
-    unlink_subnet = module.params.get('unlink_subnet')
-    state = module.params.get('state')
+    subnet_uuid = module.params.get("subnet_uuid")
+    name = module.params.get("name")
+    tenant = module.params.get("tenant")
+    project = module.params.get("project")
+    network_uuid = module.params.get("network_uuid")
+    cidr = module.params.get("cidr")
+    gateway_ip = module.params.get("gateway_ip")
+    disable_gateway = module.params.get("disable_gateway")
+    allocation_pools = module.params.get("allocation_pools")
+    enable_dhcp = module.params.get("enable_dhcp")
+    dns_nameservers = module.params.get("dns_nameservers")
+    connect_subnet = module.params.get("connect_subnet")
+    disconnect_subnet = module.params.get("disconnect_subnet")
+    unlink_subnet = module.params.get("unlink_subnet")
+    state = module.params.get("state")
 
     subnet = None
-    present = state == 'present'
+    present = state == "present"
 
     subnet = client.get_subnet_by_uuid(subnet_uuid)
     if subnet:
@@ -178,15 +177,15 @@ def send_request_to_waldur(client: WaldurClient, module):
                 for k, v in subnet.items()
                 if k
                 in [
-                    'name',
-                    'tenant',
-                    'gateway_ip',
-                    'disable_gateway',
-                    'enable_dhcp',
-                    'dns_nameservers',
-                    'connect_subnet',
-                    'disconnect_subnet',
-                    'unlink_subnet',
+                    "name",
+                    "tenant",
+                    "gateway_ip",
+                    "disable_gateway",
+                    "enable_dhcp",
+                    "dns_nameservers",
+                    "connect_subnet",
+                    "disconnect_subnet",
+                    "unlink_subnet",
                 ]
             }
             local_fields = [
@@ -232,9 +231,9 @@ def send_request_to_waldur(client: WaldurClient, module):
                 dns_nameservers=dns_nameservers,
                 disable_gateway=disable_gateway,
                 gateway_ip=gateway_ip,
-                wait=module.params['wait'],
-                interval=module.params['interval'],
-                timeout=module.params['timeout'],
+                wait=module.params["wait"],
+                interval=module.params["interval"],
+                timeout=module.params["timeout"],
             )
         has_changed = True
 
@@ -243,20 +242,20 @@ def send_request_to_waldur(client: WaldurClient, module):
 
 def main():
     fields = waldur_resource_argument_spec(
-        subnet_uuid=dict(type='str'),
-        name=dict(type='str', required=False),
-        tenant=dict(type='str', required=False),
-        project=dict(type='str', required=False),
-        network_uuid=dict(type='str', required=False),
-        cidr=dict(type='str', required=False),
-        allocation_pools=dict(type='str', required=False),
-        enable_dhcp=dict(type='bool', required=False, default=True),
-        dns_nameservers=dict(type='list', required=False),
-        disable_gateway=dict(type='str', required=False),
-        gateway_ip=dict(type='str', required=False),
-        connect_subnet=dict(type='bool', required=False),
-        disconnect_subnet=dict(type='bool', required=False),
-        unlink_subnet=dict(type='bool', required=False),
+        subnet_uuid=dict(type="str"),
+        name=dict(type="str", required=False),
+        tenant=dict(type="str", required=False),
+        project=dict(type="str", required=False),
+        network_uuid=dict(type="str", required=False),
+        cidr=dict(type="str", required=False),
+        allocation_pools=dict(type="str", required=False),
+        enable_dhcp=dict(type="bool", required=False, default=True),
+        dns_nameservers=dict(type="list", required=False),
+        disable_gateway=dict(type="str", required=False),
+        gateway_ip=dict(type="str", required=False),
+        connect_subnet=dict(type="bool", required=False),
+        disconnect_subnet=dict(type="bool", required=False),
+        unlink_subnet=dict(type="bool", required=False),
     )
     module = AnsibleModule(
         argument_spec=fields,
@@ -264,11 +263,10 @@ def main():
 
     client = waldur_client_from_module(module)
 
-    gateway_ip = module.params.get('gateway_ip')
-    disable_gateway = module.params.get('gateway_ip')
+    gateway_ip = module.params.get("gateway_ip")
+    disable_gateway = module.params.get("gateway_ip")
 
     try:
-
         has_changed = send_request_to_waldur(client, module)
     except WaldurClientException as e:
         module.fail_json(msg=str(e))
@@ -284,5 +282,5 @@ def main():
         module.exit_json(changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

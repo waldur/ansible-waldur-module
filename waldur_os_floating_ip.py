@@ -8,12 +8,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_floating_ip
 short_description: Assign floating IPs
@@ -60,9 +60,9 @@ options:
     default: true
     description:
       - A boolean value that defines whether client has to wait until the floating IP is assigned to instance.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: assign multiple floating IPs
   hosts: localhost
   tasks:
@@ -97,20 +97,20 @@ EXAMPLES = '''
         api_url: https://waldur.example.com:8000
         instance: VM #3
         state: absent
-'''
+"""
 
 
 def main():
     fields = waldur_full_argument_spec(
-        instance=dict(type='str'),
-        floating_ips=dict(type='list'),
-        address=dict(type='str'),
-        subnet=dict(type='str'),
-        state=dict(default='present', choices=['absent', 'present']),
+        instance=dict(type="str"),
+        floating_ips=dict(type="list"),
+        address=dict(type="str"),
+        subnet=dict(type="str"),
+        state=dict(default="present", choices=["absent", "present"]),
     )
-    required_together = [['address', 'subnet']]
-    mutually_exclusive = [['floating_ips', 'subnet'], ['floating_ips', 'address']]
-    required_if = [('state', 'present', ('floating_ips', 'subnet'))]
+    required_together = [["address", "subnet"]]
+    mutually_exclusive = [["floating_ips", "subnet"], ["floating_ips", "address"]]
+    required_if = [("state", "present", ("floating_ips", "subnet"))]
     module = AnsibleModule(
         argument_spec=fields,
         required_together=required_together,
@@ -118,28 +118,28 @@ def main():
         required_if=required_if,
     )
 
-    present = module.params['state'] == 'present'
+    present = module.params["state"] == "present"
     client = waldur_client_from_module(module)
 
     if present:
-        floating_ips = module.params.get('floating_ips') or [
+        floating_ips = module.params.get("floating_ips") or [
             {
-                'address': module.params['address'],
-                'subnet': module.params['subnet'],
+                "address": module.params["address"],
+                "subnet": module.params["subnet"],
             }
         ]
     else:
         floating_ips = []
 
-    instance = module.params['instance']
+    instance = module.params["instance"]
 
     try:
         response = client.assign_floating_ips(
             instance=instance,
             floating_ips=floating_ips,
-            wait=module.params['wait'],
-            timeout=module.params['timeout'],
-            interval=module.params['interval'],
+            wait=module.params["wait"],
+            timeout=module.params["timeout"],
+            interval=module.params["interval"],
         )
     except WaldurClientException as e:
         module.fail_json(msg=str(e))
@@ -147,5 +147,5 @@ def main():
         module.exit_json(meta=response)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

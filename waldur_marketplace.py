@@ -9,12 +9,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_marketplace
 short_description: Create order in Waldur Marketplace.
@@ -54,9 +54,9 @@ options:
     default: None
     description:
       - order limits or path to JSON or YAML file with order limits.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: Create a new marketplace order.
   hosts: localhost
   gather_facts: False
@@ -107,15 +107,15 @@ EXAMPLES = '''
         plan: Plan name
         attributes:
           name: my name
-'''
+"""
 
 
 def send_request_to_waldur(client, module):
-    project = module.params['project']
-    offering = module.params['offering']
-    plan = module.params['plan']
-    attributes = module.params.get('attributes')
-    limits = module.params.get('limits')
+    project = module.params["project"]
+    offering = module.params["offering"]
+    plan = module.params["plan"]
+    attributes = module.params.get("attributes")
+    limits = module.params.get("limits")
 
     def get_file_content(path):
         if path:
@@ -138,11 +138,11 @@ def send_request_to_waldur(client, module):
 def main():
     module = AnsibleModule(
         argument_spec=waldur_full_argument_spec(
-            project=dict(type='str', required=True),
-            offering=dict(type='str', required=True),
-            plan=dict(type='str', required=True),
-            attributes=dict(type='str', default=None),
-            limits=dict(type='str', default=None),
+            project=dict(type="str", required=True),
+            offering=dict(type="str", required=True),
+            plan=dict(type="str", required=True),
+            attributes=dict(type="str", default=None),
+            limits=dict(type="str", default=None),
         )
     )
 
@@ -158,5 +158,5 @@ def main():
         module.exit_json(order=order, changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

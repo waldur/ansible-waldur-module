@@ -8,12 +8,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_marketplace_os_get_instance
 short_description: Get existing OpenStack instance
@@ -41,9 +41,9 @@ options:
     description:
       - The name or UUID of the project where instance is created.
     required: true
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: Get an OpenStack instance
   hosts: localhost
   tasks:
@@ -53,21 +53,21 @@ EXAMPLES = '''
         api_url: https://waldur.example.com:8000/api
         name: Warehouse instance
         project: OpenStack Project
-'''
+"""
 
 
 def main():
     fields = {
-        'name': {'required': True, 'type': 'str'},
-        'project': {'required': False, 'type': 'str'},
+        "name": {"required": True, "type": "str"},
+        "project": {"required": False, "type": "str"},
     }
     module = AnsibleModule(argument_spec=waldur_full_argument_spec(**fields))
 
     client = waldur_client_from_module(module)
     try:
         instance = client.get_instance_via_marketplace(
-            name=module.params['name'],
-            project=module.params['project'],
+            name=module.params["name"],
+            project=module.params["project"],
         )
     except WaldurClientException as e:
         module.fail_json(msg=str(e))
@@ -75,5 +75,5 @@ def main():
         module.exit_json(instance=instance)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

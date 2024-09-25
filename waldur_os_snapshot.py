@@ -10,12 +10,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_snapshot
 short_description: Create/Delete OpenStack snapshot
@@ -71,9 +71,9 @@ options:
     default: true
     description:
       - A boolean value that defines whether client has to wait until the snapshot is provisioned.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: create snapshot
   hosts: localhost
   tasks:
@@ -96,31 +96,31 @@ EXAMPLES = '''
         name: test snapshot
         volume: test volume
         state: absent
-'''
+"""
 
 
 def send_request_to_waldur(client, module):
     has_changed = False
-    name = module.params['name']
+    name = module.params["name"]
     try:
         snapshot = client.get_snapshot(name)
     except (ObjectDoesNotExist, MultipleObjectsReturned):
         snapshot = None
         pass
-    present = module.params['state'] == 'present'
+    present = module.params["state"] == "present"
     if snapshot and not present:
-        client.delete_snapshot(snapshot['uuid'])
+        client.delete_snapshot(snapshot["uuid"])
         has_changed = True
     elif present:
         client.create_snapshot(
-            name=module.params['name'],
-            description=module.params.get('description'),
-            interval=module.params['interval'],
-            kept_until=module.params.get('kept_until'),
-            tags=module.params.get('tags'),
-            timeout=module.params['timeout'],
-            volume=module.params['volume'],
-            wait=module.params['wait'],
+            name=module.params["name"],
+            description=module.params.get("description"),
+            interval=module.params["interval"],
+            kept_until=module.params.get("kept_until"),
+            tags=module.params.get("tags"),
+            timeout=module.params["timeout"],
+            volume=module.params["volume"],
+            wait=module.params["wait"],
         )
         has_changed = True
 
@@ -129,15 +129,15 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = waldur_resource_argument_spec(
-        kept_until=dict(type='str', default=None),
-        volume=dict(type='str', default=None),
+        kept_until=dict(type="str", default=None),
+        volume=dict(type="str", default=None),
     )
     module = AnsibleModule(argument_spec=fields)
 
-    state = module.params['state']
-    volume = module.params['volume']
+    state = module.params["state"]
+    volume = module.params["volume"]
 
-    if state == 'present':
+    if state == "present":
         if not volume:
             module.fail_json(msg="Parameter 'volume' is required if state == 'present'")
 
@@ -151,5 +151,5 @@ def main():
         module.exit_json(changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

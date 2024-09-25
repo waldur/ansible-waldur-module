@@ -8,12 +8,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_subnet_gather_facts
 short_description: Get OpenStack tenant subnet
@@ -41,9 +41,9 @@ options:
     description:
       - The uuid of the subnet.
     required: true
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: get subnet
   hosts: localhost
   tasks:
@@ -62,12 +62,12 @@ EXAMPLES = '''
         access_token: b83557fd8e2066e98f27dee8f3b3433cdc4183ce
         api_url: https://waldur.example.com:8000/api
         tenant: waldur-dev-subnet-1
-'''
+"""
 
 
 def send_request_to_waldur(client, module):
-    tenant_uuid = module.params['tenant_uuid']
-    subnet_uuid = module.params['subnet_uuid']
+    tenant_uuid = module.params["tenant_uuid"]
+    subnet_uuid = module.params["subnet_uuid"]
     if subnet_uuid:
         return [client.get_subnet_by_uuid(subnet_uuid)]
     else:
@@ -76,8 +76,8 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = waldur_full_argument_spec(
-        subnet_uuid=dict(required=False, type='str'),
-        tenant_uuid=dict(required=True, type='str'),
+        subnet_uuid=dict(required=False, type="str"),
+        tenant_uuid=dict(required=True, type="str"),
     )
     module = AnsibleModule(argument_spec=fields)
 
@@ -88,9 +88,8 @@ def main():
     except WaldurClientException as e:
         module.fail_json(msg=str(e))
     else:
-
         module.exit_json(subnets=subnets)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
