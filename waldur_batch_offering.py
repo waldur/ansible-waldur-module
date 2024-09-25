@@ -8,12 +8,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 options:
     api_url:
@@ -97,9 +97,9 @@ options:
     datacite_doi:
         description:
             - Persistent ID for the service.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 ---
 - hosts: localhost
   gather_facts: no
@@ -134,41 +134,41 @@ EXAMPLES = '''
         geolocations:
         - latitude: 59.3990796
           longitude: 26.6625565
-'''
+"""
 
 
 def format_params(params):
     excluded_keys = [
-        'batch_service',
-        'hostname',
-        'username',
-        'default_account',
-        'port',
-        'gateway',
-        'type',
-        'provider',
+        "batch_service",
+        "hostname",
+        "username",
+        "default_account",
+        "port",
+        "gateway",
+        "type",
+        "provider",
     ]
 
     formatted_params = {
         k: v for (k, v) in params.items() if v and k not in excluded_keys
     }
 
-    formatted_params['type'] = 'SlurmInvoices.SlurmPackage'
+    formatted_params["type"] = "SlurmInvoices.SlurmPackage"
 
-    if params.get('provider'):
-        formatted_params['customer'] = params['provider']
+    if params.get("provider"):
+        formatted_params["customer"] = params["provider"]
 
     service_attributes = {
-        'batch_service': params['batch_service'],
-        'hostname': params['hostname'],
-        'username': params['username'],
-        'default_account': params['default_account'],
+        "batch_service": params["batch_service"],
+        "hostname": params["hostname"],
+        "username": params["username"],
+        "default_account": params["default_account"],
     }
-    if params.get('port'):
-        service_attributes['port'] = params['port']
-    if params.get('gateway'):
-        service_attributes['gateway'] = params['gateway']
-    formatted_params['service_attributes'] = service_attributes
+    if params.get("port"):
+        service_attributes["port"] = params["port"]
+    if params.get("gateway"):
+        service_attributes["gateway"] = params["gateway"]
+    formatted_params["service_attributes"] = service_attributes
 
     return formatted_params
 
@@ -182,36 +182,36 @@ def send_request_to_waldur(client, module):
 def main():
     fields = {
         # Overview
-        'name': {'required': True, 'type': 'str'},
-        'description': {'required': False, 'type': 'str'},
-        'full_description': {'required': False, 'type': 'str'},
-        'native_name': {'required': False, 'type': 'str'},
-        'native_description': {'required': False, 'type': 'str'},
-        'terms_of_service': {'required': False, 'type': 'str'},
+        "name": {"required": True, "type": "str"},
+        "description": {"required": False, "type": "str"},
+        "full_description": {"required": False, "type": "str"},
+        "native_name": {"required": False, "type": "str"},
+        "native_description": {"required": False, "type": "str"},
+        "terms_of_service": {"required": False, "type": "str"},
         # Organization details
-        'provider': {'required': False, 'type': 'str'},
-        'rating': {'required': False, 'type': 'int', 'choices': list(range(1, 6))},
+        "provider": {"required": False, "type": "str"},
+        "rating": {"required": False, "type": "int", "choices": list(range(1, 6))},
         # Description
-        'category': {'required': True, 'type': 'str'},
-        'attributes': {'required': False, 'type': 'dict'},  # category attributes
-        'geolocations': {'required': False, 'type': 'list'},
+        "category": {"required": True, "type": "str"},
+        "attributes": {"required": False, "type": "dict"},  # category attributes
+        "geolocations": {"required": False, "type": "list"},
         # Accounting
-        'plans': {'required': True, 'type': 'list'},
+        "plans": {"required": True, "type": "list"},
         # Management
-        'batch_service': {
-            'required': True,
-            'type': 'str',
-            'choices': ['SLURM', 'MOAB'],
+        "batch_service": {
+            "required": True,
+            "type": "str",
+            "choices": ["SLURM", "MOAB"],
         },
-        'hostname': {'required': True, 'type': 'str'},
-        'username': {'required': True, 'type': 'str'},
-        'port': {'required': False, 'type': 'int'},
-        'gateway': {'required': False, 'type': 'str'},
-        'use_sudo': {'required': False, 'type': 'str'},
-        'default_account': {'required': True, 'type': 'str'},
-        'shared': {'required': False, 'type': 'bool'},
-        'billable': {'required': False, 'type': 'bool'},
-        'datacite_doi': {'required': False, 'type': 'str'},
+        "hostname": {"required": True, "type": "str"},
+        "username": {"required": True, "type": "str"},
+        "port": {"required": False, "type": "int"},
+        "gateway": {"required": False, "type": "str"},
+        "use_sudo": {"required": False, "type": "str"},
+        "default_account": {"required": True, "type": "str"},
+        "shared": {"required": False, "type": "bool"},
+        "billable": {"required": False, "type": "bool"},
+        "datacite_doi": {"required": False, "type": "str"},
     }
 
     module = AnsibleModule(
@@ -228,5 +228,5 @@ def main():
         module.fail_json(msg=str(e))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

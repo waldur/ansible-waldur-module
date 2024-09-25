@@ -7,15 +7,15 @@ import waldur_marketplace_os_instance
 class InstanceSubNetUpdateTest(unittest.TestCase):
     def setUp(self):
         module = mock.Mock()
-        self.subnets_set = ['subnet_1', 'subnet_2']
+        self.subnets_set = ["subnet_1", "subnet_2"]
         module.params = {
-            'name': 'Test instance',
-            'project': 'Test project',
-            'subnet': self.subnets_set,
-            'state': 'present',
-            'wait': True,
-            'interval': 20,
-            'timeout': 600,
+            "name": "Test instance",
+            "project": "Test project",
+            "subnet": self.subnets_set,
+            "state": "present",
+            "wait": True,
+            "interval": 20,
+            "timeout": 600,
         }
         module.check_mode = False
         self.module = module
@@ -24,30 +24,30 @@ class InstanceSubNetUpdateTest(unittest.TestCase):
         self,
     ):
         client = mock.Mock()
-        instance_uuid = '59e46d029a79473779915a22'
+        instance_uuid = "59e46d029a79473779915a22"
         client.get_instance_via_marketplace.return_value = {
-            'uuid': instance_uuid,
-            'ports': [
+            "uuid": instance_uuid,
+            "ports": [
                 {
-                    'subnet_name': 'Test subnet',
-                    'subnet_uuid': '77e46d029a79473779915a22',
+                    "subnet_name": "Test subnet",
+                    "subnet_uuid": "77e46d029a79473779915a22",
                 }
             ],
-            'security_groups': [],
+            "security_groups": [],
         }
 
         module = mock.Mock()
         module.params = {
-            'name': 'Test instance',
-            'project': 'Test project',
-            'networks': [
-                {'subnet': subnet_name, 'floating_ip': 'auto'}
+            "name": "Test instance",
+            "project": "Test project",
+            "networks": [
+                {"subnet": subnet_name, "floating_ip": "auto"}
                 for subnet_name in self.subnets_set
             ],
-            'state': 'present',
-            'wait': True,
-            'interval': 20,
-            'timeout': 600,
+            "state": "present",
+            "wait": True,
+            "interval": 20,
+            "timeout": 600,
         }
         module.check_mode = False
 
@@ -65,23 +65,23 @@ class InstanceSubNetUpdateTest(unittest.TestCase):
 
     def test_update_ip_of_marketplace_instance(self):
         client = mock.Mock()
-        instance_uuid = '59e46d029a79473779915a22'
+        instance_uuid = "59e46d029a79473779915a22"
         client.get_instance_via_marketplace.return_value = {
-            'uuid': instance_uuid,
-            'ports': [],
-            'security_groups': [],
+            "uuid": instance_uuid,
+            "ports": [],
+            "security_groups": [],
         }
 
         module = mock.Mock()
         module.params = {
-            'name': 'Test instance',
-            'project': 'Test project',
-            'subnet': self.subnets_set[0],
-            'floating_ip': 'auto',
-            'state': 'present',
-            'wait': True,
-            'interval': 20,
-            'timeout': 600,
+            "name": "Test instance",
+            "project": "Test project",
+            "subnet": self.subnets_set[0],
+            "floating_ip": "auto",
+            "state": "present",
+            "wait": True,
+            "interval": 20,
+            "timeout": 600,
         }
         module.check_mode = False
 

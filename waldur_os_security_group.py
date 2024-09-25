@@ -12,12 +12,12 @@ from waldur_client import (
 )
 
 ANSIBLE_METADATA = {
-    'metadata_version': '1.1',
-    'status': ['preview'],
-    'supported_by': 'OpenNode',
+    "metadata_version": "1.1",
+    "status": ["preview"],
+    "supported_by": "OpenNode",
 }
 
-DOCUMENTATION = '''
+DOCUMENTATION = """
 ---
 module: waldur_os_security_group
 short_description: Add/Update/Remove OpenStack tenant security group
@@ -82,9 +82,9 @@ options:
     default: true
     description:
       - A boolean value that defines whether client has to wait until the security group is provisioned.
-'''
+"""
 
-EXAMPLES = '''
+EXAMPLES = """
 - name: add security group
   hosts: localhost
   tasks:
@@ -266,7 +266,7 @@ EXAMPLES = '''
           direction: egress
         state: present
         name: sec-group-with-direction
-'''
+"""
 
 
 def compare_rules(local_rules, remote_rules):
@@ -277,14 +277,14 @@ def compare_rules(local_rules, remote_rules):
             tmp_remote_rules = copy.deepcopy(remote_rules)
 
             for rules in tmp_remote_rules:
-                if 'remote_group' in local_rule:
-                    if 'cidr' in rules:
-                        rules.pop('cidr')
-                    if 'ethertype' in rules:
-                        rules.pop('ethertype')
+                if "remote_group" in local_rule:
+                    if "cidr" in rules:
+                        rules.pop("cidr")
+                    if "ethertype" in rules:
+                        rules.pop("ethertype")
                 else:
-                    if 'remote_group' in rules:
-                        rules.pop('remote_group')
+                    if "remote_group" in rules:
+                        rules.pop("remote_group")
 
             remote_rules.pop(tmp_remote_rules.index(local_rule))
         except ValueError:
@@ -315,70 +315,70 @@ def compare_description(description_1, description_2):
 
 def get_tenant_uuid(client, waldur_resource_uuid):
     response = client.get_marketplace_resource(waldur_resource_uuid)
-    scope_url = response['scope']
+    scope_url = response["scope"]
     response = client._get(scope_url, valid_states=[200])
-    return response['uuid']
+    return response["uuid"]
 
 
 def send_request_to_waldur(client, module):
     has_changed = False
-    tenant = module.params.get('tenant')
-    waldur_resource = module.params.get('waldur_resource')
+    tenant = module.params.get("tenant")
+    waldur_resource = module.params.get("waldur_resource")
 
     if not tenant and not waldur_resource:
-        raise AnsibleError('Tenant or waldur_resource must be specified.')
+        raise AnsibleError("Tenant or waldur_resource must be specified.")
 
     if not tenant:
         tenant = get_tenant_uuid(client, waldur_resource)
 
-    project = module.params.get('project')
-    name = module.params['name']
-    description = module.params.get('description') or ''
-    rules = module.params['rules']
+    project = module.params.get("project")
+    name = module.params["name"]
+    description = module.params.get("description") or ""
+    rules = module.params["rules"]
 
     for rule in rules:
-        for item in ['from_port', 'to_port', 'protocol']:
+        for item in ["from_port", "to_port", "protocol"]:
             if item not in rule:
-                module.fail_json(msg='A rule must contain %s parameter.' % item)
+                module.fail_json(msg="A rule must contain %s parameter." % item)
 
-        if 'cidr' in rule and 'remote_group' in rule:
+        if "cidr" in rule and "remote_group" in rule:
             module.fail_json(
-                msg='Either cidr or remote_group must be specified, not both.'
+                msg="Either cidr or remote_group must be specified, not both."
             )
 
-        if 'remote_group' in rule:
-            remote_group = client.get_security_group(tenant, rule['remote_group'])
-            rule['remote_group'] = remote_group['url']
-        elif 'cidr' in rule:
-            address = rule['cidr']
-            if 'ethertype' not in rule or rule['ethertype'] == 'IPv4':
+        if "remote_group" in rule:
+            remote_group = client.get_security_group(tenant, rule["remote_group"])
+            rule["remote_group"] = remote_group["url"]
+        elif "cidr" in rule:
+            address = rule["cidr"]
+            if "ethertype" not in rule or rule["ethertype"] == "IPv4":
                 try:
                     IPv4Interface(address)
                 except (AddressValueError, NetmaskValueError) as e:
-                    module.fail_json(msg='Invalid IPv4 address %s: %s' % (address, e))
+                    module.fail_json(msg="Invalid IPv4 address %s: %s" % (address, e))
                 else:
-                    rule['ethertype'] = 'IPv4'
-            elif rule['ethertype'] == 'IPv6':
+                    rule["ethertype"] = "IPv4"
+            elif rule["ethertype"] == "IPv6":
                 try:
                     IPv6Interface(address)
                 except (AddressValueError, NetmaskValueError) as e:
-                    module.fail_json(msg='Invalid IPv6 address %s: %s' % (address, e))
+                    module.fail_json(msg="Invalid IPv6 address %s: %s" % (address, e))
             else:
-                module.fail_json(msg='Invalid ethertype: %s' % rule['ethertype'])
+                module.fail_json(msg="Invalid ethertype: %s" % rule["ethertype"])
         else:
-            module.fail_json(msg='Either cidr or remote_group must be specified.')
+            module.fail_json(msg="Either cidr or remote_group must be specified.")
 
-        if 'direction' not in rule:
-            rule['direction'] = 'ingress'
+        if "direction" not in rule:
+            rule["direction"] = "ingress"
         else:
-            if rule['direction'] not in ['ingress', 'egress']:
+            if rule["direction"] not in ["ingress", "egress"]:
                 module.fail_json(
-                    msg='Invalid direction %s expected ingress or egress'
-                    % rule['direction']
+                    msg="Invalid direction %s expected ingress or egress"
+                    % rule["direction"]
                 )
 
     security_group = client.get_security_group(tenant, name)
-    present = module.params['state'] == 'present'
+    present = module.params["state"] == "present"
 
     if security_group:
         if present:
@@ -388,25 +388,24 @@ def send_request_to_waldur(client, module):
                     for k, v in rule.items()
                     if k
                     in [
-                        'from_port',
-                        'to_port',
-                        'cidr',
-                        'protocol',
-                        'direction',
-                        'description',
-                        'ethertype',
-                        'remote_group',
+                        "from_port",
+                        "to_port",
+                        "cidr",
+                        "protocol",
+                        "direction",
+                        "description",
+                        "ethertype",
+                        "remote_group",
                     ]
                 }
-                for rule in security_group['rules']
+                for rule in security_group["rules"]
             ]
             if compare_description(
-                security_group['description'], description
+                security_group["description"], description
             ) and compare_rules(rules, rules_comp):
                 has_changed = False
             else:
-
-                if not compare_description(security_group['description'], description):
+                if not compare_description(security_group["description"], description):
                     client.update_security_group_description(
                         security_group, description
                     )
@@ -416,7 +415,7 @@ def send_request_to_waldur(client, module):
                     client.update_security_group_rules(security_group, rules)
                     has_changed = True
         else:
-            client.delete_security_group(security_group['uuid'])
+            client.delete_security_group(security_group["uuid"])
             has_changed = True
     elif present:
         client.create_security_group(
@@ -425,10 +424,10 @@ def send_request_to_waldur(client, module):
             name=name,
             description=description,
             rules=rules,
-            tags=module.params.get('tags'),
-            wait=module.params['wait'],
-            interval=module.params['interval'],
-            timeout=module.params['timeout'],
+            tags=module.params.get("tags"),
+            wait=module.params["wait"],
+            interval=module.params["interval"],
+            timeout=module.params["timeout"],
         )
         has_changed = True
 
@@ -437,10 +436,10 @@ def send_request_to_waldur(client, module):
 
 def main():
     fields = waldur_resource_argument_spec(
-        rules=dict(type='list', required=False, default=[]),
-        project=dict(type='str', required=False),
-        tenant=dict(type='str', required=False),
-        waldur_resource=dict(type='str', required=False),
+        rules=dict(type="list", required=False, default=[]),
+        project=dict(type="str", required=False),
+        tenant=dict(type="str", required=False),
+        waldur_resource=dict(type="str", required=False),
     )
     module = AnsibleModule(
         argument_spec=fields,
@@ -456,5 +455,5 @@ def main():
         module.exit_json(changed=has_changed)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
