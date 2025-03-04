@@ -1,11 +1,11 @@
 import unittest
 from unittest import mock
 
-import waldur_batch_allocation
+from ansible_waldur_module import waldur_batch_allocation
 
 
-@mock.patch("waldur_batch_allocation.waldur_client_from_module")
-@mock.patch("waldur_batch_allocation.AnsibleModule")
+@mock.patch("ansible_waldur_module.waldur_batch_allocation.waldur_client_from_module")
+@mock.patch("ansible_waldur_module.waldur_batch_allocation.AnsibleModule")
 class BatchAllocationMakingTest(unittest.TestCase):
     def setUp(self):
         module = mock.Mock()

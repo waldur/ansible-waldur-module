@@ -10,37 +10,31 @@ authors = ["OpenNode Team <info@opennodecloud.com>"]
 license = "MIT"
 readme = "README.md"
 homepage = "https://waldur.com"
+packages = [
+    { include = "ansible_waldur_module", from = "src" }
+]
 classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-packages = [
-    { include = "waldur_client.py" },
-    { include = "waldur_marketplace.py" },
-    { include = "waldur_marketplace_os_get_instance.py" },
-    { include = "waldur_marketplace_os_instance.py" },
-    { include = "waldur_marketplace_os_volume.py" },
-    { include = "waldur_os_floating_ip.py" },
-    { include = "waldur_os_instance_volume.py" },
-    { include = "waldur_os_security_group.py" },
-    { include = "waldur_os_security_group_gather_facts.py" },
-    { include = "waldur_os_snapshot.py" },
-    { include = "waldur_batch_allocation.py" },
-    { include = "waldur_batch_offering.py" },
-    { include = "waldur_os_subnet.py" },
-    { include = "waldur_os_subnet_gather_facts.py" },
-]
 
 [tool.poetry.dependencies]
-python = "*"
+ansible-core = ">=2.11.0"
+python = ">=3.8"
 requests = ">=2.6.0"
 python-waldur-client = ">=0.6.2"
 urllib3 = "<2.0.0"
+pre-commit = "^2.13.0"
+
 
 [tool.poetry.group.dev.dependencies]
 responses = ">=0.5.0"
+
+[tool.poetry.group.test.dependencies]
+pytest = "^7.0"
+mock = "^5.0"
 
 [build-system]
 requires = ["poetry-core"]

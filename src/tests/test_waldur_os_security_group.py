@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-import waldur_os_security_group
+from ansible_waldur_module import waldur_os_security_group
 
 WEB = {
     "url": "api/123",

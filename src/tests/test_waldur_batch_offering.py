@@ -1,11 +1,11 @@
 import unittest
 from unittest import mock
 
-import waldur_batch_offering
+from ansible_waldur_module import waldur_batch_offering
 
 
-@mock.patch("waldur_batch_offering.waldur_client_from_module")
-@mock.patch("waldur_batch_offering.AnsibleModule")
+@mock.patch("ansible_waldur_module.waldur_batch_offering.waldur_client_from_module")
+@mock.patch("ansible_waldur_module.waldur_batch_offering.AnsibleModule")
 class CreateOfferingTest(unittest.TestCase):
     def setUp(self):
         module = mock.Mock()

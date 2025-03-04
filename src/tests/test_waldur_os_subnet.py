@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-import waldur_os_subnet
+from ansible_waldur_module import waldur_os_subnet
 
 
 def fail_side_effect(*args, **kwargs):

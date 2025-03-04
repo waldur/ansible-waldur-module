@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-import waldur_os_instance_volume
+from ansible_waldur_module import waldur_os_instance_volume
 
 
 class BaseVolumeTest(unittest.TestCase):

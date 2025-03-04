@@ -1,7 +1,7 @@
 import unittest
 from unittest import mock
 
-import waldur_marketplace_os_instance
+from ansible_waldur_module import waldur_marketplace_os_instance
 
 
 class InstanceSubNetUpdateTest(unittest.TestCase):
