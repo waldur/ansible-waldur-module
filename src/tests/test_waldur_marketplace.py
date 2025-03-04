@@ -2,11 +2,11 @@ import tempfile
 import unittest
 from unittest import mock
 
-import waldur_marketplace
+from ansible_waldur_module import waldur_marketplace
 
 
-@mock.patch("waldur_marketplace.waldur_client_from_module")
-@mock.patch("waldur_marketplace.AnsibleModule")
+@mock.patch("ansible_waldur_module.waldur_marketplace.waldur_client_from_module")
+@mock.patch("ansible_waldur_module.waldur_marketplace.AnsibleModule")
 class OrderItemCreateTest(unittest.TestCase):
     def setUp(self):
         module = mock.Mock()
