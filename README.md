@@ -28,7 +28,7 @@ pip install ansible-waldur-module
     api_url: "{{ api_url }}"
     flavor: m1.micro
     floating_ip: auto
-    image: CentOS 7 x86_64
+    image: Rocky 9 x86_64
     name: "{{ instance_name }}"
     project: "OpenStack Project"
     offering: Instance in Tenant
