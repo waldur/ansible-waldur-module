@@ -1,10 +1,20 @@
 #!/usr/bin/python
 
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_full_argument_spec,
+from waldur_api_client import AuthenticatedClient
+from waldur_api_client.errors import UnexpectedStatus
+from waldur_api_client.api.marketplace_provider_offerings import (
+    marketplace_provider_offerings_create,
+)
+from waldur_api_client.api.marketplace_categories import (
+    marketplace_categories_list,
+)
+from waldur_api_client.api.customers import customers_list
+from ansible_waldur_module.utils import get_argument_spec, is_uuid_like
+from waldur_api_client.models import (
+    OfferingCreateRequest,
+    BaseProviderPlanRequest,
+    BillingUnit,
 )
 
 ANSIBLE_METADATA = {
@@ -137,6 +147,28 @@ EXAMPLES = """
 """
 
 
+def get_category_uuid(client, category_param):
+    if is_uuid_like(category_param):
+        return category_param
+
+    # If not a UUID or UUID not found, try to find by name
+    categories = marketplace_categories_list.sync(client=client, title=category_param)
+    if not categories:
+        raise ValueError(f"Category '{category_param}' not found")
+    return categories[0].uuid
+
+
+def get_provider_uuid(client, provider_param):
+    if is_uuid_like(provider_param):
+        return provider_param
+
+    # If not a UUID or UUID not found, try to find by name
+    customers = customers_list.sync(client=client, name=provider_param)
+    if not customers:
+        raise ValueError(f"Provider '{provider_param}' not found")
+    return customers[0].uuid
+
+
 def format_params(params):
     excluded_keys = [
         "batch_service",
@@ -170,13 +202,63 @@ def format_params(params):
         service_attributes["gateway"] = params["gateway"]
     formatted_params["service_attributes"] = service_attributes
 
+    # Set default values for required fields to avoid errors
+    for field in ["full_description", "terms_of_service", "datacite_doi"]:
+        formatted_params.setdefault(field, "")
+
     return formatted_params
 
 
 def send_request_to_waldur(client, module):
     params = format_params(module.params)
-    offering, changed = client.create_offering(params, module.check_mode)
-    return offering, changed
+
+    # Get UUIDs for category and provider
+    category_uuid = get_category_uuid(client, params["category"])
+    customer_uuid = get_provider_uuid(client, params["customer"])
+
+    plans = []
+    for plan in params.get("plans", []):
+        total_price = sum(float(price) for price in plan["prices"].values())
+        plan_request = BaseProviderPlanRequest(
+            name=plan["name"],
+            unit=BillingUnit(plan["unit"]),
+            unit_price=str(total_price),
+        )
+        plans.append(plan_request)
+
+    # Create offering request with all parameters
+    offering_request = OfferingCreateRequest(
+        name=params["name"],
+        description=params.get("description", ""),
+        full_description=params["full_description"],
+        terms_of_service=params["terms_of_service"],
+        type_=params.get("type", "SlurmInvoices.SlurmPackage"),
+        shared=params.get("shared", True),
+        billable=params.get("billable", True),
+        datacite_doi=params["datacite_doi"],
+        plans=plans,
+        category=f"{client._base_url}/api/marketplace-categories/{category_uuid}/",
+        customer=f"{client._base_url}/api/customers/{customer_uuid}/",
+    )
+
+    # Set optional fields if they exist
+    additional_fields = ["native_name", "native_description", "service_attributes"]
+    for field in additional_fields:
+        if field in params:
+            offering_request[field] = params[field]
+
+    if module.check_mode:
+        return None, True
+
+    offering_response = marketplace_provider_offerings_create.sync(
+        client=client, body=offering_request
+    )
+
+    if offering_response is None:
+        module.fail_json(
+            msg="Failed to create offering: API returned None response",
+        )
+    return offering_response.to_dict(), True
 
 
 def main():
@@ -215,16 +297,20 @@ def main():
     }
 
     module = AnsibleModule(
-        argument_spec=waldur_full_argument_spec(**fields), supports_check_mode=True
+        argument_spec=get_argument_spec(**fields), supports_check_mode=True
     )
 
-    client = waldur_client_from_module(module)
+    client = AuthenticatedClient(
+        base_url=module.params["api_url"],
+        token=module.params["access_token"],
+        prefix="Token",
+        raise_on_unexpected_status=True,
+    )
 
     try:
         offering, changed = send_request_to_waldur(client, module)
-
         module.exit_json(offering=offering, changed=changed)
-    except WaldurClientException as e:
+    except UnexpectedStatus as e:
         module.fail_json(msg=str(e))
 
 
