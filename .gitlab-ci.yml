@@ -8,17 +8,28 @@ include:
   - project: "waldur/waldur-pipelines"
     file: "/templates/release/python-module-release.yml"
 
-image: "registry.hpc.ut.ee/mirror/themattrix/tox:latest"
-
-Run unit tests:
+.base_job:
+  image: registry.hpc.ut.ee/mirror/library/python:3.12
   stage: test
   interruptible: true
   rules:
     - if: '$CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_COMMIT_BRANCH == "master"'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  before_script:
+    - apt-get update
+    - pip install poetry
+    - poetry install
+
+Run lint:
+  extends: .base_job
   script:
-    - tox
+    - poetry run pre-commit run -a
+
+Run tests:
+  extends: .base_job
+  script:
+    - poetry run pytest -s src/tests/
 
 Upload configuration guide:
   image: "registry.hpc.ut.ee/mirror/library/python:3.8-buster"
