@@ -38,6 +38,7 @@ pytest = "^7.0"
 mock = "^5.0"
 respx = "^0.22.0"
 httpx = "^0.28.1"
+faker = "^37.0.0"
 
 [build-system]
 requires = ["poetry-core"]
