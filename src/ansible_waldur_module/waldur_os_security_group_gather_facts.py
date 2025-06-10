@@ -1,10 +1,12 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
+from waldur_api_client import AuthenticatedClient
+from waldur_api_client.api.openstack_security_groups import (
+    openstack_security_groups_list,
 )
+from waldur_api_client.errors import UnexpectedStatus
+from waldur_api_client.api.openstack_tenants import openstack_tenants_list
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -67,10 +69,23 @@ EXAMPLES = """
 def send_request_to_waldur(client, module):
     tenant = module.params["tenant"]
     name = module.params["name"]
+    tenants_list = openstack_tenants_list.sync(
+        client=client,
+        name=tenant,
+    )
+
+    security_groups = openstack_security_groups_list.sync(
+        client=client,
+        tenant_uuid=tenants_list[0].uuid,
+    )
+
     if name:
-        return [client.get_security_group(tenant, name)]
-    else:
-        return client.list_security_group(tenant)
+        matching_groups = [group for group in security_groups if group.name == name]
+        if not matching_groups:
+            module.fail_json(msg=f"Security group with name '{name}' not found")
+        return matching_groups
+
+    return [group.to_dict() for group in security_groups]
 
 
 def main():
@@ -82,11 +97,16 @@ def main():
     )
     module = AnsibleModule(argument_spec=fields)
 
-    client = waldur_client_from_module(module)
+    client = AuthenticatedClient(
+        base_url=module.params["api_url"],
+        token=module.params["access_token"],
+        prefix="Token",
+        raise_on_unexpected_status=True,
+    )
 
     try:
         security_groups = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except UnexpectedStatus as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(security_groups=security_groups)
