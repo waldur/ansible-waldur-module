@@ -20,11 +20,14 @@ MODEL_REGISTRY = {
 
 def serialize_attrs_instance(instance):
     """Convert an attrs instance to a dict with proper UUID serialization."""
-    return attr.asdict(
+    result = attr.asdict(
         instance,
         value_serializer=serialize_value,
         filter=lambda attr, value: attr.name != "additional_properties",
     )
+    if "type_" in result:
+        result["type"] = result.pop("type_")
+    return result
 
 
 def serialize_value(inst, attr, value):
@@ -35,6 +38,8 @@ def serialize_value(inst, attr, value):
         return str(value)
     elif isinstance(value, datetime.datetime):
         return value.isoformat()
+    if attr.name == "type_":
+        return value
     return value
 
 
@@ -42,6 +47,10 @@ def generate_value(attr_type: Any) -> Any:
     # Type handling
     origin = get_origin(attr_type)
     args = get_args(attr_type)
+    if isinstance(attr_type, str):
+        ref_cls = MODEL_REGISTRY.get(attr_type)
+        if ref_cls:
+            return generate_example_instance(ref_cls)
     if origin is None:
         if isinstance(attr_type, ForwardRef):
             ref_name = attr_type.__forward_arg__
@@ -101,6 +110,12 @@ def generate_value(attr_type: Any) -> Any:
             return random.choice(list(enum_type))
         elif any(isinstance(arg, ForwardRef) for arg in args):
             # For ForwardRef, we'll return empty dict for now
+            for arg in args:
+                if isinstance(arg, ForwardRef):
+                    ref_name = arg.__forward_arg__
+                    ref_cls = MODEL_REGISTRY.get(ref_name)
+                    if ref_cls:
+                        return generate_example_instance(ref_cls)
             return {}
     return Unset()
 
@@ -110,5 +125,8 @@ def generate_example_instance(cls: Any) -> Any:
     for field in attr.fields(cls):
         if field.name == "additional_properties":
             continue
-        values[field.name] = generate_value(field.type)
+        if field.name == "secret_options":
+            values[field.name] = {}
+        else:
+            values[field.name] = generate_value(field.type)
     return cls(**values)
