@@ -11,6 +11,7 @@ import json
         models.Offering,
         models.OpenStackSecurityGroup,
         models.OpenStackTenant,
+        models.OpenStackInstance,
     ],
 )
 def test_multiple_models_serialization_cycle(model_class):
