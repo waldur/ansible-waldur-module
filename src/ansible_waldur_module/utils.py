@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 import uuid
+from waldur_api_client import AuthenticatedClient
 
 
 def _get_base_spec():
@@ -31,3 +32,13 @@ def is_uuid_like(val):
         return False
     else:
         return True
+
+
+def get_client(module):
+    return AuthenticatedClient(
+        base_url=module.params["api_url"],
+        token=module.params["access_token"],
+        prefix="Token",
+        timeout=600,
+        raise_on_unexpected_status=True,
+    )

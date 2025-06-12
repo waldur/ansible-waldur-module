@@ -1,11 +1,22 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_full_argument_spec,
+import time
+from waldur_api_client.api.openstack_instances import (
+    openstack_instances_list,
+    openstack_instances_retrieve,
+    openstack_instances_update_floating_ips,
 )
+from waldur_api_client.models.open_stack_instance_floating_i_ps_update_request import (
+    OpenStackInstanceFloatingIPsUpdateRequest,
+)
+from waldur_api_client.errors import UnexpectedStatus
+from ansible_waldur_module.utils import get_argument_spec
+from waldur_api_client.models.open_stack_nested_floating_ip_request import (
+    OpenStackNestedFloatingIPRequest,
+)
+from ansible_waldur_module.utils import get_client
+from waldur_api_client.models.core_states import CoreStates
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -100,8 +111,45 @@ EXAMPLES = """
 """
 
 
+def is_instance_ready(client, instance_uuid):
+    instance = openstack_instances_retrieve.sync(
+        client=client,
+        uuid=instance_uuid,
+    )
+    if instance.state == CoreStates.ERRED:
+        raise ValueError(f"Instance is in erred state: {instance.error_message}")
+    return instance.state == CoreStates.OK
+
+
+def wait_for_instance(client, instance_uuid, interval=20, timeout=600):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        try:
+            if is_instance_ready(client, instance_uuid):
+                return True
+        except ValueError as e:
+            raise e
+        time.sleep(interval)
+
+    message = f"Instance '{instance_uuid}' has not reached stable state. Seconds passed: {timeout}"
+    raise TimeoutError(message)
+
+
+def get_os_instance_by_name(client, instance_name, module):
+    try:
+        instances = openstack_instances_list.sync(
+            client=client,
+            name=instance_name,
+        )
+    except UnexpectedStatus as e:
+        module.fail_json(msg=str(e))
+    if not instances:
+        module.fail_json(msg=f"Instance with name '{instance_name}' not found")
+    return instances[0]
+
+
 def main():
-    fields = waldur_full_argument_spec(
+    fields = get_argument_spec(
         instance=dict(type="str"),
         floating_ips=dict(type="list"),
         address=dict(type="str"),
@@ -110,7 +158,9 @@ def main():
     )
     required_together = [["address", "subnet"]]
     mutually_exclusive = [["floating_ips", "subnet"], ["floating_ips", "address"]]
-    required_if = [("state", "present", ("floating_ips", "subnet"))]
+    required_if = [
+        ("state", "present", ("floating_ips", "subnet"), True),
+    ]
     module = AnsibleModule(
         argument_spec=fields,
         required_together=required_together,
@@ -119,7 +169,8 @@ def main():
     )
 
     present = module.params["state"] == "present"
-    client = waldur_client_from_module(module)
+
+    client = get_client(module)
 
     if present:
         floating_ips = module.params.get("floating_ips") or [
@@ -128,20 +179,33 @@ def main():
                 "subnet": module.params["subnet"],
             }
         ]
-    else:
-        floating_ips = []
+        if not floating_ips or not isinstance(floating_ips, list):
+            module.fail_json(msg="'floating_ips' must be a non-empty list.")
 
-    instance = module.params["instance"]
+        # Create the request body using the subnet directly from the input
+        request = OpenStackInstanceFloatingIPsUpdateRequest(
+            floating_ips=[
+                OpenStackNestedFloatingIPRequest(subnet=floating_ip["subnet"])
+                for floating_ip in floating_ips
+            ]
+        )
+
+    else:
+        request = OpenStackInstanceFloatingIPsUpdateRequest(floating_ips=[])
 
     try:
-        response = client.assign_floating_ips(
-            instance=instance,
-            floating_ips=floating_ips,
-            wait=module.params["wait"],
-            timeout=module.params["timeout"],
-            interval=module.params["interval"],
+        instance = get_os_instance_by_name(client, module.params["instance"], module)
+        response = openstack_instances_update_floating_ips.sync_detailed(
+            client=client, uuid=instance.uuid, body=request
         )
-    except WaldurClientException as e:
+        if module.params["wait"]:
+            wait_for_instance(
+                client,
+                instance.uuid,
+                timeout=module.params["timeout"],
+                interval=module.params["interval"],
+            )
+    except (UnexpectedStatus, ValueError, TimeoutError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(meta=response)
