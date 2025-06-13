@@ -21,6 +21,20 @@ def get_argument_spec(**kwargs):
     return spec
 
 
+def waldur_resource_argument_spec(**kwargs):
+    spec = _get_base_spec()
+    spec.update(
+        dict(
+            name=dict(required=True, type="str"),
+            description=dict(type="str", default=""),
+            state=dict(default="present", choices=["absent", "present"]),
+            tags=dict(type="list", default=None),
+        )
+    )
+    spec.update(kwargs)
+    return spec
+
+
 def is_uuid_like(val):
     """
     Check if value looks like a valid UUID.

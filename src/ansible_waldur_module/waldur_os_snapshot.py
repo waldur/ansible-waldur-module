@@ -1,13 +1,18 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    MultipleObjectsReturned,
-    ObjectDoesNotExist,
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_resource_argument_spec,
+from waldur_api_client.api.openstack_volumes import openstack_volumes_list
+from waldur_api_client.api.openstack_volumes import openstack_volumes_snapshot
+from waldur_api_client.api.openstack_snapshots import openstack_snapshots_list
+from waldur_api_client.api.openstack_snapshots import openstack_snapshots_retrieve
+from waldur_api_client.api.openstack_snapshots import openstack_snapshots_destroy
+from waldur_api_client.models.open_stack_snapshot_request import (
+    OpenStackSnapshotRequest,
 )
+from waldur_api_client.errors import UnexpectedStatus
+from ansible_waldur_module.utils import waldur_resource_argument_spec, get_client
+import time
+from waldur_api_client.models.core_states import CoreStates
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -99,29 +104,80 @@ EXAMPLES = """
 """
 
 
+def get_volume_by_name(client, volume_name, module):
+    volumes = openstack_volumes_list.sync(
+        client=client,
+        name=volume_name,
+    )
+    if not volumes:
+        module.fail_json(msg=f"Volume with name '{volume_name}' not found")
+    return volumes[0]
+
+
+def get_snapshot_by_name(client, snapshot_name, module):
+    snapshots = openstack_snapshots_list.sync(
+        client=client,
+        name=snapshot_name,
+    )
+    if not snapshots:
+        return None
+    return snapshots[0]
+
+
+def wait_for_snapshot(client, snapshot_uuid, interval=20, timeout=600):
+    waited = 0
+    while waited < timeout:
+        snapshot = openstack_snapshots_retrieve.sync(client=client, uuid=snapshot_uuid)
+        if not snapshot:
+            raise ValueError(f"Snapshot with UUID {snapshot_uuid} not found")
+
+        if snapshot.state == CoreStates.ERRED:
+            raise ValueError(f"Snapshot is in erred state: {snapshot.error_message}")
+
+        if snapshot.state == CoreStates.OK:
+            return True
+        time.sleep(interval)
+        waited += interval
+
+    raise TimeoutError(
+        f'Snapshot "{snapshot_uuid}" has not reached stable state after {timeout} seconds'
+    )
+
+
 def send_request_to_waldur(client, module):
     has_changed = False
     name = module.params["name"]
-    try:
-        snapshot = client.get_snapshot(name)
-    except (ObjectDoesNotExist, MultipleObjectsReturned):
-        snapshot = None
-        pass
+    snapshot = get_snapshot_by_name(client, name, module)
     present = module.params["state"] == "present"
     if snapshot and not present:
-        client.delete_snapshot(snapshot["uuid"])
+        openstack_snapshots_destroy.sync_detailed(
+            client=client,
+            uuid=snapshot.uuid,
+        )
         has_changed = True
     elif present:
-        client.create_snapshot(
+        wait = module.params["wait"]
+        timeout = module.params["timeout"]
+        interval = module.params["interval"]
+        request = OpenStackSnapshotRequest(
             name=module.params["name"],
             description=module.params.get("description"),
-            interval=module.params["interval"],
             kept_until=module.params.get("kept_until"),
-            tags=module.params.get("tags"),
-            timeout=module.params["timeout"],
-            volume=module.params["volume"],
-            wait=module.params["wait"],
+            metadata=module.params.get("tags"),
         )
+        volume = get_volume_by_name(client, module.params["volume"], module)
+        snapshot = openstack_volumes_snapshot.sync(
+            client=client,
+            uuid=volume.uuid,
+            body=request,
+        )
+        if wait:
+            wait_for_snapshot(
+                client=client,
+                snapshot_uuid=snapshot.uuid,
+                interval=interval,
+                timeout=timeout,
+            )
         has_changed = True
 
     return has_changed
@@ -141,11 +197,11 @@ def main():
         if not volume:
             module.fail_json(msg="Parameter 'volume' is required if state == 'present'")
 
-    client = waldur_client_from_module(module)
+    client = get_client(module)
 
     try:
         has_changed = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except (UnexpectedStatus, ValueError, TimeoutError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(changed=has_changed)
