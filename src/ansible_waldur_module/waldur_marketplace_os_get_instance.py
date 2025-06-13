@@ -1,10 +1,14 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_full_argument_spec,
+
+from waldur_api_client.api.openstack_instances import openstack_instances_list
+from waldur_api_client.errors import UnexpectedStatus
+from ansible_waldur_module.utils import (
+    get_argument_spec,
+    is_uuid_like,
+    get_project,
+    get_client,
 )
 
 ANSIBLE_METADATA = {
@@ -61,18 +65,30 @@ def main():
         "name": {"required": True, "type": "str"},
         "project": {"required": False, "type": "str"},
     }
-    module = AnsibleModule(argument_spec=waldur_full_argument_spec(**fields))
+    module = AnsibleModule(argument_spec=get_argument_spec(**fields))
 
-    client = waldur_client_from_module(module)
+    client = get_client(module)
     try:
-        instance = client.get_instance_via_marketplace(
-            name=module.params["name"],
-            project=module.params["project"],
+        if is_uuid_like(module.params["project"]):
+            project_uuid = module.params["project"]
+        else:
+            project = get_project(client, module.params["project"])
+            project_uuid = project.uuid
+        kwargs = (
+            {"uuid": module.params["name"]}
+            if is_uuid_like(module.params["name"])
+            else {"name": module.params["name"]}
         )
-    except WaldurClientException as e:
-        module.fail_json(msg=str(e))
-    else:
+        instances = openstack_instances_list.sync(
+            client=client,
+            **kwargs,
+            project=project_uuid,
+        )
+        # Convert the instance to a dict for Ansible
+        instance = instances[0].to_dict()
         module.exit_json(instance=instance)
+    except (UnexpectedStatus, ValueError, IndexError) as e:
+        module.fail_json(msg=str(e))
 
 
 if __name__ == "__main__":

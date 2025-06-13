@@ -2,6 +2,7 @@
 # has to be a full import due to Ansible 2.0 compatibility
 import uuid
 from waldur_api_client import AuthenticatedClient
+from waldur_api_client.api.projects import projects_list, projects_retrieve
 
 
 def _get_base_spec():
@@ -32,6 +33,18 @@ def is_uuid_like(val):
         return False
     else:
         return True
+
+
+def get_project(client: AuthenticatedClient, project: str):
+    if is_uuid_like(project):
+        project = projects_retrieve.sync(client=client, uuid=project)
+        return project
+    projects = projects_list.sync(client=client, name_exact=project)
+    if not projects:
+        raise ValueError(f"Project '{project}' not found")
+    if len(projects) > 1:
+        raise ValueError(f"Multiple projects found with name '{project}'")
+    return projects[0]
 
 
 def get_client(module):
