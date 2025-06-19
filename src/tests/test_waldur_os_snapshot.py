@@ -1,7 +1,6 @@
 import unittest
 from unittest import mock
 import respx
-import httpx
 
 from ansible_waldur_module import waldur_os_snapshot
 from waldur_api_client.models.open_stack_volume import OpenStackVolume
@@ -61,11 +60,7 @@ class TestWaldurOsSnapshot(unittest.TestCase):
         snapshot.state = CoreStates.OK
         respx.get(
             f"{self.module.params['api_url']}/api/openstack-snapshots/{snapshot.uuid}/"
-        ).mock(
-            return_value=httpx.Response(
-                status_code=200, json=serialize_attrs_instance(snapshot)
-            )
-        )
+        ).respond(status_code=200, json=serialize_attrs_instance(snapshot))
 
         client = get_client(self.module)
         has_changed = waldur_os_snapshot.send_request_to_waldur(client, self.module)

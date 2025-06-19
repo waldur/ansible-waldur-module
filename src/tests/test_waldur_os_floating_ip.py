@@ -1,6 +1,5 @@
 import unittest
 from unittest import mock
-import httpx
 import respx
 
 from ansible_waldur_module import waldur_os_floating_ip
@@ -52,10 +51,10 @@ class TestWaldurOsFloatingIp(unittest.TestCase):
             f"{self.API_URL}/api/openstack-instances/{self.instance_dict['uuid']}/",
         ).respond(json=instance_dict)
 
-    def mock_update_floating_ips(self, expected_body=None):
+    def mock_update_floating_ips(self):
         return respx.post(
             f"{self.API_URL}/api/openstack-instances/{self.instance_dict['uuid']}/update_floating_ips/",
-        ).mock(return_value=httpx.Response(status_code=200, json={"status": "ok"}))
+        ).respond(status_code=200, json={"status": "ok"})
 
     def test_assign_single_floating_ip(self, mock_module):
         mock_module.return_value = self.module

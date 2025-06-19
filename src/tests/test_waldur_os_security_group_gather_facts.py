@@ -1,6 +1,5 @@
 import unittest
 from unittest import mock
-import httpx
 import respx
 
 from ansible_waldur_module import waldur_os_security_group_gather_facts
@@ -41,16 +40,12 @@ class TestWaldurOsSecurityGroupGatherFacts(unittest.TestCase):
         respx.get(
             "http://example.com:8000/api/openstack-tenants/",
             params={"name": self.TEST_TENANT_NAME},
-        ).mock(return_value=httpx.Response(status_code=200, json=[self.tenant_dict]))
+        ).respond(status_code=200, json=[self.tenant_dict])
 
         respx.get(
             "http://example.com:8000/api/openstack-security-groups/",
             params={"tenant_uuid": self.tenant_dict["uuid"]},
-        ).mock(
-            return_value=httpx.Response(
-                status_code=200, json=[self.security_group_dict]
-            )
-        )
+        ).respond(status_code=200, json=[self.security_group_dict])
 
         security_groups = waldur_os_security_group_gather_facts.send_request_to_waldur(
             self.client, self.module
@@ -64,12 +59,12 @@ class TestWaldurOsSecurityGroupGatherFacts(unittest.TestCase):
         respx.get(
             "http://example.com:8000/api/openstack-tenants/",
             params={"name": self.TEST_TENANT_NAME},
-        ).mock(return_value=httpx.Response(status_code=200, json=[self.tenant_dict]))
+        ).respond(status_code=200, json=[self.tenant_dict])
 
         respx.get(
             "http://example.com:8000/api/openstack-security-groups/",
             params={"tenant_uuid": self.tenant_dict["uuid"]},
-        ).mock(return_value=httpx.Response(status_code=200, json=[]))
+        ).respond(status_code=200, json=[])
         waldur_os_security_group_gather_facts.send_request_to_waldur(
             self.client, self.module
         )
