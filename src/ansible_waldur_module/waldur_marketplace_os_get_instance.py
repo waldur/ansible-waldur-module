@@ -2,6 +2,7 @@
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
 
+from ansible_waldur_module.exceptions import ResourceError
 from waldur_api_client.api.openstack_instances import openstack_instances_list
 from waldur_api_client.errors import UnexpectedStatus
 from ansible_waldur_module.utils import (
@@ -87,7 +88,7 @@ def main():
         # Convert the instance to a dict for Ansible
         instance = instances[0].to_dict()
         module.exit_json(instance=instance)
-    except (UnexpectedStatus, ValueError, IndexError) as e:
+    except (UnexpectedStatus, ResourceError, IndexError) as e:
         module.fail_json(msg=str(e))
 
 

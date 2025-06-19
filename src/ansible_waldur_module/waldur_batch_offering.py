@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 from ansible.module_utils.basic import AnsibleModule
+from ansible_waldur_module.exceptions import ResourceNotFoundError
 from waldur_api_client import AuthenticatedClient
 from waldur_api_client.errors import UnexpectedStatus
 from waldur_api_client.api.marketplace_provider_offerings import (
@@ -154,7 +155,7 @@ def get_category_uuid(client, category_param):
     # If not a UUID or UUID not found, try to find by name
     categories = marketplace_categories_list.sync(client=client, title=category_param)
     if not categories:
-        raise ValueError(f"Category '{category_param}' not found")
+        raise ResourceNotFoundError(f"Category '{category_param}' not found")
     return categories[0].uuid
 
 
@@ -165,7 +166,7 @@ def get_provider_uuid(client, provider_param):
     # If not a UUID or UUID not found, try to find by name
     customers = customers_list.sync(client=client, name=provider_param)
     if not customers:
-        raise ValueError(f"Provider '{provider_param}' not found")
+        raise ResourceNotFoundError(f"Provider '{provider_param}' not found")
     return customers[0].uuid
 
 

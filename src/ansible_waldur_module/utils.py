@@ -1,6 +1,10 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 import uuid
+from ansible_waldur_module.exceptions import (
+    ResourceMultipleFoundError,
+    ResourceNotFoundError,
+)
 from waldur_api_client.client import AuthenticatedClient
 from waldur_api_client.api.projects import projects_list, projects_retrieve
 from waldur_api_client.api.openstack_instances import (
@@ -55,13 +59,14 @@ def is_uuid_like(val):
 
 def get_project(client: AuthenticatedClient, project: str):
     if is_uuid_like(project):
-        project = projects_retrieve.sync(client=client, uuid=project)
-        return project
+        return projects_retrieve.sync(client=client, uuid=project)
     projects = projects_list.sync(client=client, name_exact=project)
     if not projects:
-        raise ValueError(f"Project '{project}' not found")
+        raise ResourceNotFoundError(f"Project '{project}' not found")
     if len(projects) > 1:
-        raise ValueError(f"Multiple projects found with name '{project}'")
+        raise ResourceMultipleFoundError(
+            f"Multiple projects found with name '{project}'"
+        )
     return projects[0]
 
 
@@ -76,10 +81,7 @@ def get_client(module):
 
 def get_os_instance(client, instance_name, project_name=None):
     if is_uuid_like(instance_name):
-        instance = openstack_instances_retrieve.sync(client=client, uuid=instance_name)
-        if not instance:
-            raise ValueError(f"Instance with name '{instance_name}' not found")
-        return instance
+        return openstack_instances_retrieve.sync(client=client, uuid=instance_name)
     if project_name:
         kwargs = {"project_name": project_name}
     else:
@@ -88,5 +90,5 @@ def get_os_instance(client, instance_name, project_name=None):
         client=client, name=instance_name, **kwargs
     )
     if not instances:
-        raise ValueError(f"Instance with name '{instance_name}' not found")
+        raise ResourceNotFoundError(f"Instance with name '{instance_name}' not found")
     return instances[0]

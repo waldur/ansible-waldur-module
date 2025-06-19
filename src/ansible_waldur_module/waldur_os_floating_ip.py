@@ -2,6 +2,7 @@
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
 import time
+from ansible_waldur_module.exceptions import ResourceError, ResourceStateError
 from waldur_api_client.api.openstack_instances import (
     openstack_instances_list,
     openstack_instances_retrieve,
@@ -117,22 +118,20 @@ def is_instance_ready(client, instance_uuid):
         uuid=instance_uuid,
     )
     if instance.state == CoreStates.ERRED:
-        raise ValueError(f"Instance is in erred state: {instance.error_message}")
+        raise ResourceStateError(
+            f"Instance is in erred state: {instance.error_message}"
+        )
     return instance.state == CoreStates.OK
 
 
 def wait_for_instance(client, instance_uuid, interval=20, timeout=600):
     start_time = time.time()
     while time.time() - start_time < timeout:
-        try:
-            if is_instance_ready(client, instance_uuid):
-                return True
-        except ValueError as e:
-            raise e
+        if is_instance_ready(client, instance_uuid):
+            return True
         time.sleep(interval)
 
-    message = f"Instance '{instance_uuid}' has not reached stable state. Seconds passed: {timeout}"
-    raise TimeoutError(message)
+    raise ResourceStateError(f"Instance '{instance_uuid}' has not reached stable state")
 
 
 def get_os_instance_by_name(client, instance_name, module):
@@ -205,7 +204,7 @@ def main():
                 timeout=module.params["timeout"],
                 interval=module.params["interval"],
             )
-    except (UnexpectedStatus, ValueError, TimeoutError) as e:
+    except (UnexpectedStatus, ResourceError, TimeoutError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(meta=response)
