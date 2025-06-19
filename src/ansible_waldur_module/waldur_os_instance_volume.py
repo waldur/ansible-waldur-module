@@ -1,7 +1,12 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from ansible_waldur_module.exceptions import InstanceStateError
+from ansible_waldur_module.exceptions import (
+    ResourceError,
+    ResourceMultipleFoundError,
+    ResourceNotFoundError,
+    ResourceStateError,
+)
 from waldur_api_client.errors import UnexpectedStatus
 from ansible_waldur_module.utils import (
     get_client,
@@ -106,17 +111,17 @@ EXAMPLES = """
 
 def get_volume(client, volume_uuid, project_uuid):
     if is_uuid_like(volume_uuid):
-        volume = openstack_volumes_retrieve.sync(client=client, uuid=volume_uuid)
-        if not volume:
-            raise ValueError(f"Volume '{volume_uuid}' not found")
+        return openstack_volumes_retrieve.sync(client=client, uuid=volume_uuid)
     else:
         volumes = openstack_volumes_list.sync(
             client=client, project=project_uuid.uuid, name=volume_uuid
         )
         if not volumes:
-            raise ValueError(f"Volume '{volume_uuid}' not found")
+            raise ResourceNotFoundError(f"Volume '{volume_uuid}' not found")
         if len(volumes) > 1:
-            raise ValueError(f"Multiple volumes found for '{volume_uuid}'")
+            raise ResourceMultipleFoundError(
+                f"Multiple volumes found for '{volume_uuid}'"
+            )
         volume = volumes[0]
     return volume
 
@@ -124,7 +129,7 @@ def get_volume(client, volume_uuid, project_uuid):
 def is_volume_ready(client, volume_uuid):
     volume = openstack_volumes_retrieve.sync(client=client, uuid=volume_uuid)
     if volume.state == CoreStates.ERRED:
-        raise InstanceStateError(f"Volume is in erred state: {volume.error_message}")
+        raise ResourceStateError(f"Volume is in erred state: {volume.error_message}")
     return volume.state == CoreStates.OK
 
 
@@ -135,8 +140,7 @@ def wait_for_volume(client, volume_uuid, interval=20, timeout=600):
             return True
         time.sleep(interval)
 
-    message = f"Volume '{volume_uuid}' has not reached stable state. Seconds passed: {timeout}"
-    raise TimeoutError(message)
+    raise ResourceStateError(f"Volume '{volume_uuid}' has not reached stable state")
 
 
 def send_request_to_waldur(client, module):
@@ -209,7 +213,7 @@ def main():
 
     try:
         has_changed = send_request_to_waldur(client, module)
-    except (UnexpectedStatus, ValueError, TimeoutError, InstanceStateError) as e:
+    except (UnexpectedStatus, ResourceError, TimeoutError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(changed=has_changed)

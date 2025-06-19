@@ -1,6 +1,10 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
+from ansible_waldur_module.exceptions import (
+    ResourceError,
+    ResourceStateError,
+)
 from waldur_api_client.api.openstack_volumes import openstack_volumes_list
 from waldur_api_client.api.openstack_volumes import openstack_volumes_snapshot
 from waldur_api_client.api.openstack_snapshots import openstack_snapshots_list
@@ -128,19 +132,19 @@ def wait_for_snapshot(client, snapshot_uuid, interval=20, timeout=600):
     waited = 0
     while waited < timeout:
         snapshot = openstack_snapshots_retrieve.sync(client=client, uuid=snapshot_uuid)
-        if not snapshot:
-            raise ValueError(f"Snapshot with UUID {snapshot_uuid} not found")
 
         if snapshot.state == CoreStates.ERRED:
-            raise ValueError(f"Snapshot is in erred state: {snapshot.error_message}")
+            raise ResourceStateError(
+                f"Snapshot is in erred state: {snapshot.error_message}"
+            )
 
         if snapshot.state == CoreStates.OK:
             return True
         time.sleep(interval)
         waited += interval
 
-    raise TimeoutError(
-        f'Snapshot "{snapshot_uuid}" has not reached stable state after {timeout} seconds'
+    raise ResourceStateError(
+        f'Snapshot "{snapshot_uuid}" has not reached stable state.'
     )
 
 
@@ -201,7 +205,7 @@ def main():
 
     try:
         has_changed = send_request_to_waldur(client, module)
-    except (UnexpectedStatus, ValueError, TimeoutError) as e:
+    except (UnexpectedStatus, ResourceError, TimeoutError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(changed=has_changed)

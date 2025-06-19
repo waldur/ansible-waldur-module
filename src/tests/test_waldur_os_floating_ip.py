@@ -187,5 +187,5 @@ class TestWaldurOsFloatingIp(unittest.TestCase):
         waldur_os_floating_ip.main()
         self.module.fail_json.assert_called_once()
         self.assertIn(
-            " has not reached stable state.", self.module.fail_json.call_args[1]["msg"]
+            " has not reached stable state", self.module.fail_json.call_args[1]["msg"]
         )
