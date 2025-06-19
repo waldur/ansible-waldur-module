@@ -1,11 +1,24 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_full_argument_spec,
+from ansible_waldur_module.exceptions import InstanceStateError
+from waldur_api_client.errors import UnexpectedStatus
+from ansible_waldur_module.utils import (
+    get_client,
+    get_argument_spec,
+    is_uuid_like,
+    get_project,
+    get_os_instance,
 )
+from waldur_api_client.api.openstack_volumes import (
+    openstack_volumes_list,
+    openstack_volumes_retrieve,
+    openstack_volumes_attach,
+    openstack_volumes_detach,
+)
+from waldur_api_client.models.volume_attach_request import VolumeAttachRequest
+from waldur_api_client.models.core_states import CoreStates
+import time
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -32,10 +45,6 @@ options:
   api_url:
     description:
       - Fully qualified URL to the Waldur.
-    required: true
-  device:
-    description:
-      - Name of volume as instance device e.g. /dev/vdb.
     required: true
   instance:
     description:
@@ -81,7 +90,6 @@ EXAMPLES = """
         project: database management
         volume: postgresql-data
         instance: postgresql-server
-        device: /dev/vdb
 
 - name: detach volume from the instance
   hosts: localhost
@@ -96,54 +104,91 @@ EXAMPLES = """
 """
 
 
+def get_volume(client, volume_uuid, project_uuid):
+    if is_uuid_like(volume_uuid):
+        volume = openstack_volumes_retrieve.sync(client=client, uuid=volume_uuid)
+        if not volume:
+            raise ValueError(f"Volume '{volume_uuid}' not found")
+    else:
+        volumes = openstack_volumes_list.sync(
+            client=client, project=project_uuid.uuid, name=volume_uuid
+        )
+        if not volumes:
+            raise ValueError(f"Volume '{volume_uuid}' not found")
+        if len(volumes) > 1:
+            raise ValueError(f"Multiple volumes found for '{volume_uuid}'")
+        volume = volumes[0]
+    return volume
+
+
+def is_volume_ready(client, volume_uuid):
+    volume = openstack_volumes_retrieve.sync(client=client, uuid=volume_uuid)
+    if volume.state == CoreStates.ERRED:
+        raise InstanceStateError(f"Volume is in erred state: {volume.error_message}")
+    return volume.state == CoreStates.OK
+
+
+def wait_for_volume(client, volume_uuid, interval=20, timeout=600):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_volume_ready(client, volume_uuid):
+            return True
+        time.sleep(interval)
+
+    message = f"Volume '{volume_uuid}' has not reached stable state. Seconds passed: {timeout}"
+    raise TimeoutError(message)
+
+
 def send_request_to_waldur(client, module):
-    device = module.params["device"]
     instance = module.params["instance"]
-    project = module.params["project"]
+    project = get_project(client, module.params["project"])
     state = module.params["state"]
     volume = module.params["volume"]
     wait = module.params["wait"]
     interval = module.params["interval"]
     timeout = module.params["timeout"]
-    params = dict(
-        wait=wait,
-        interval=interval,
-        timeout=timeout,
-    )
 
     # Get volume by ID or name and project
-    volume = client.get_volume(volume, project)
-    runtime_state = volume["runtime_state"]
-
+    volume = get_volume(client, volume, project)
+    runtime_state = volume.runtime_state
+    instance = get_os_instance(client, instance, project.name)
     if state == "absent":
         if runtime_state == "available":
             # Volume is already detached so there's nothing to do
             return False
         elif runtime_state == "in-use":
             # Volume should be detached
-            client.detach_volume(volume["uuid"], **params)
+            openstack_volumes_detach.sync_detailed(client=client, uuid=volume.uuid)
+            if wait:
+                wait_for_volume(client, volume.uuid, interval, timeout)
             return True
     elif state == "present":
         # Get instance by ID or name and project
-        instance = client.get_instance(instance, project)
         if runtime_state == "in-use":
             # Volume is already attached to target instance so there's nothing to do
-            if volume["instance"] == instance["url"]:
+            if volume.instance == instance.url:
                 return False
             else:
                 # Volume is attached to another instance, so we should detach and attach
-                client.detach_volume(volume["uuid"])
-                client.attach_volume(volume["uuid"], instance["uuid"], device, **params)
+                openstack_volumes_detach.sync_detailed(client=client, uuid=volume.uuid)
+                openstack_volumes_attach.sync_detailed(
+                    client=client,
+                    uuid=volume.uuid,
+                    body=VolumeAttachRequest(instance=instance.url),
+                )
                 return True
         elif runtime_state == "available":
             # Volume should be attached to the instance
-            client.attach_volume(volume["uuid"], instance["uuid"], device, **params)
+            openstack_volumes_attach.sync_detailed(
+                client=client,
+                uuid=volume.uuid,
+                body=VolumeAttachRequest(instance=instance.url),
+            )
             return True
 
 
 def main():
-    fields = waldur_full_argument_spec(
-        device=dict(type="int", default=None),
+    fields = get_argument_spec(
         instance=dict(type="str", default=None),
         project=dict(type="str", default=None),
         state=dict(default="present", choices=["absent", "present"]),
@@ -153,7 +198,6 @@ def main():
 
     state = module.params["state"]
     instance = module.params["instance"]
-    device = module.params["instance"]
 
     if state == "present":
         if not instance:
@@ -161,14 +205,11 @@ def main():
                 msg="Parameter 'instance' is required if state == 'present'"
             )
 
-        if not device:
-            module.fail_json(msg="Parameter 'device' is required if state == 'present'")
-
-    client = waldur_client_from_module(module)
+    client = get_client(module)
 
     try:
         has_changed = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except (UnexpectedStatus, ValueError, TimeoutError, InstanceStateError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(changed=has_changed)
