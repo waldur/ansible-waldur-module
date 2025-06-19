@@ -1,8 +1,12 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 import uuid
-from waldur_api_client import AuthenticatedClient
+from waldur_api_client.client import AuthenticatedClient
 from waldur_api_client.api.projects import projects_list, projects_retrieve
+from waldur_api_client.api.openstack_instances import (
+    openstack_instances_list,
+    openstack_instances_retrieve,
+)
 
 
 def _get_base_spec():
@@ -66,6 +70,23 @@ def get_client(module):
         base_url=module.params["api_url"],
         token=module.params["access_token"],
         prefix="Token",
-        timeout=600,
         raise_on_unexpected_status=True,
     )
+
+
+def get_os_instance(client, instance_name, project_name=None):
+    if is_uuid_like(instance_name):
+        instance = openstack_instances_retrieve.sync(client=client, uuid=instance_name)
+        if not instance:
+            raise ValueError(f"Instance with name '{instance_name}' not found")
+        return instance
+    if project_name:
+        kwargs = {"project_name": project_name}
+    else:
+        kwargs = {}
+    instances = openstack_instances_list.sync(
+        client=client, name=instance_name, **kwargs
+    )
+    if not instances:
+        raise ValueError(f"Instance with name '{instance_name}' not found")
+    return instances[0]
