@@ -2,10 +2,19 @@
 # has to be a full import due to Ansible 2.0 compatibility
 import yaml
 from ansible.module_utils.basic import AnsibleModule, to_text
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_full_argument_spec,
+from waldur_api_client.api.marketplace_orders import marketplace_orders_create
+from waldur_api_client.models.order_create_request import OrderCreateRequest
+from waldur_api_client.models.order_create_request_limits import (
+    OrderCreateRequestLimits,
+)
+from waldur_api_client.errors import UnexpectedStatus
+import httpx
+from ansible_waldur_module.utils import (
+    get_argument_spec,
+    get_project,
+    get_offering,
+    get_plan,
+    get_client,
 )
 
 ANSIBLE_METADATA = {
@@ -111,9 +120,9 @@ EXAMPLES = """
 
 
 def send_request_to_waldur(client, module):
-    project = module.params["project"]
-    offering = module.params["offering"]
-    plan = module.params["plan"]
+    project = get_project(client, module.params["project"])
+    offering = get_offering(client, module.params["offering"])
+    plan = get_plan(client, module.params["plan"], module.params["offering"])
     attributes = module.params.get("attributes")
     limits = module.params.get("limits")
 
@@ -128,16 +137,30 @@ def send_request_to_waldur(client, module):
 
     attributes = get_file_content(attributes) or {}
     limits = get_file_content(limits) or {}
+    limits_obj = OrderCreateRequestLimits.from_dict(limits)
+    try:
+        order_request = OrderCreateRequest(
+            offering=offering.url,
+            project=project.url,
+            plan=plan.url,
+            attributes=attributes,
+            limits=limits_obj,
+            accepting_terms_of_service=True,
+        )
 
-    response = client.create_marketplace_order(
-        project, offering, plan, attributes, limits
-    )
-    return response, True
+        response = marketplace_orders_create.sync(
+            client=client,
+            body=order_request,
+        )
+    except (UnexpectedStatus, ValueError) as e:
+        module.fail_json(msg=str(e))
+
+    return response.to_dict(), True
 
 
 def main():
     module = AnsibleModule(
-        argument_spec=waldur_full_argument_spec(
+        argument_spec=get_argument_spec(
             project=dict(type="str", required=True),
             offering=dict(type="str", required=True),
             plan=dict(type="str", required=True),
@@ -146,13 +169,12 @@ def main():
         )
     )
 
-    client = waldur_client_from_module(module)
-
+    client = get_client(module)
     try:
         order, has_changed = send_request_to_waldur(client, module)
     except (IOError, OSError) as e:
         module.fail_json(msg="Unable to open file: %s" % to_text(e))
-    except WaldurClientException as e:
+    except (UnexpectedStatus, ValueError, httpx.TimeoutException) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(order=order, changed=has_changed)
