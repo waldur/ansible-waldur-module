@@ -7,6 +7,14 @@ from ansible_waldur_module.exceptions import (
 )
 from waldur_api_client.client import AuthenticatedClient
 from waldur_api_client.api.projects import projects_list, projects_retrieve
+from waldur_api_client.api.marketplace_public_offerings import (
+    marketplace_public_offerings_list,
+    marketplace_public_offerings_retrieve,
+)
+from waldur_api_client.api.marketplace_plans import (
+    marketplace_plans_list,
+    marketplace_plans_retrieve,
+)
 from waldur_api_client.api.openstack_instances import (
     openstack_instances_list,
     openstack_instances_retrieve,
@@ -68,6 +76,37 @@ def get_project(client: AuthenticatedClient, project: str):
             f"Multiple projects found with name '{project}'"
         )
     return projects[0]
+
+
+def get_offering(client: AuthenticatedClient, offering: str):
+    if is_uuid_like(offering):
+        offering_obj = marketplace_public_offerings_retrieve.sync(
+            client=client, uuid=offering
+        )
+        return offering_obj
+
+    offerings = marketplace_public_offerings_list.sync(
+        client=client, name_exact=offering
+    )
+    if not offerings:
+        raise ValueError(f"Offering '{offering}' not found")
+    return offerings[0]
+
+
+def get_plan(client: AuthenticatedClient, plan: str, offering: str = None):
+    if is_uuid_like(plan):
+        plan_obj = marketplace_plans_retrieve.sync(client=client, uuid=plan)
+        return plan_obj
+    if offering:
+        offering_obj = get_offering(client, offering)
+    else:
+        raise ValueError("Offering is required to get a plan")
+    plans = marketplace_plans_list.sync(client=client, offering_uuid=offering_obj.uuid)
+
+    matching_plan = next((p for p in plans if p.name == plan), None)
+    if not matching_plan:
+        raise ValueError(f"Plan '{plan}' not found in offering '{offering}'")
+    return matching_plan
 
 
 def get_client(module):
