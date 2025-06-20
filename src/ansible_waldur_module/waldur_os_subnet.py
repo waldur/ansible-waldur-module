@@ -2,12 +2,33 @@
 # has to be a full import due to Ansible 2.0 compatibility
 
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClient,
-    WaldurClientException,
-    waldur_client_from_module,
+from waldur_api_client.client import AuthenticatedClient
+from waldur_api_client.models.core_states import CoreStates
+from waldur_api_client.models.open_stack_sub_net import OpenStackSubNet
+from ansible_waldur_module.exceptions import (
+    ResourceError,
+    ResourceNotFoundError,
+    ResourceStateError,
+)
+from ansible_waldur_module.utils import (
+    get_client,
+    is_uuid_like,
     waldur_resource_argument_spec,
 )
+from waldur_api_client.errors import UnexpectedStatus
+from waldur_api_client.api.openstack_subnets import (
+    openstack_subnets_retrieve,
+    openstack_subnets_update,
+    openstack_subnets_connect,
+    openstack_subnets_disconnect,
+    openstack_subnets_unlink,
+)
+from waldur_api_client.api.openstack_networks import (
+    openstack_networks_create_subnet,
+    openstack_networks_retrieve,
+)
+from waldur_api_client.models.open_stack_sub_net_request import OpenStackSubNetRequest
+import time
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -35,16 +56,9 @@ options:
     description:
       - Fully qualified URL to the Waldur.
     required: true
-  uuid:
+  subnet_uuid:
     description:
       - Unique identifier for subnet
-  tenant:
-    description:
-      - The name or uuid of the tenant that the subnet should be connected to
-    required: true
-  project:
-    description:
-      - The name or uuid of the project that the subnet is apart of
   network_uuid:
     description:
       - Unique identifier of the network to associate with the subnet
@@ -60,9 +74,6 @@ options:
   allocation_pools
     description:
       - Allocation pool IP addresses for the subnet
-  enable_dhcp
-    description:
-      - Enable dhcp on the subnet
   dns_nameservers
     description:
       - DNS nameservers for the subnet
@@ -92,7 +103,6 @@ EXAMPLES = """
         access_token: b83557fd8e2066e98f27dee8f3b3433cdc4183ce
         api_url: https://waldur.example.com:8000/api
         uuid: 935c8841fd1644228a9d1463e8693650
-        project: feline-suppliment-sourcer
         connect_subnet: True
 
 - name: Disconnect a subnet from the router
@@ -103,7 +113,6 @@ EXAMPLES = """
         access_token: b83557fd8e2066e98f27dee8f3b3433cdc4183ce
         api_url: https://waldur.example.com:8000/api
         uuid: 935c8841fd1644228a9d1463e8693650
-        project: feline-suppliment-sourcer
         disconnect_subnet: True
 
 - name: Unlink a subnet
@@ -114,7 +123,6 @@ EXAMPLES = """
         access_token: b83557fd8e2066e98f27dee8f3b3433cdc4183ce
         api_url: https://waldur.example.com:8000/api
         uuid: 935c8841fd1644228a9d1463e8693650
-        project: feline-suppliment-sourcer
         unlink_subnet: True
 
 - name: Update a subnet
@@ -126,130 +134,147 @@ EXAMPLES = """
         api_url: https://waldur.example.com:8000/api
         uuid: 935c8841fd1644228a9d1463e8693650
         name: vanessa-nutrition-subnet
-        project: feline-suppliment-sourcer
         gateway_ip: 192.168.42.2
 
 """
 
 
-def compare_fields(checked_fields, local_fields):
-    try:
-        field_diff = {
-            k: checked_fields[k]
-            for k, v in checked_fields
-            if k in local_fields
-            if local_fields[k, v] != checked_fields[k, v]
-        }
-        if field_diff:
+def wait_for_subnet(
+    client: AuthenticatedClient, network_uuid, interval: int, timeout: int
+):
+    waited = 0
+    while waited < timeout:
+        network = openstack_networks_retrieve.sync(
+            client=client,
+            uuid=network_uuid,
+        )
+        if not network:
+            raise ResourceNotFoundError("Network not found")
+        if network.state == CoreStates.ERRED:
+            raise ResourceStateError("Network is in an erred state")
+        if network.state == CoreStates.OK:
             return True
-        else:
+        time.sleep(interval)
+        waited += interval
+    raise TimeoutError("Subnet creation timed out")
+
+
+def fields_match(subnet: OpenStackSubNet, local_fields: dict) -> bool:
+    for field, value in local_fields.items():
+        current_value = getattr(subnet, field)
+        if current_value != value:
             return False
-    except ValueError:
-        return False
+    return True
 
 
-def send_request_to_waldur(client: WaldurClient, module):
+def send_request_to_waldur(client: AuthenticatedClient, module):
     has_changed = False
     subnet_uuid = module.params.get("subnet_uuid")
     name = module.params.get("name")
-    tenant = module.params.get("tenant")
-    project = module.params.get("project")
     network_uuid = module.params.get("network_uuid")
     cidr = module.params.get("cidr")
     gateway_ip = module.params.get("gateway_ip")
     disable_gateway = module.params.get("disable_gateway")
     allocation_pools = module.params.get("allocation_pools")
-    enable_dhcp = module.params.get("enable_dhcp")
     dns_nameservers = module.params.get("dns_nameservers")
     connect_subnet = module.params.get("connect_subnet")
     disconnect_subnet = module.params.get("disconnect_subnet")
     unlink_subnet = module.params.get("unlink_subnet")
     state = module.params.get("state")
+    wait = module.params.get("wait")
+    interval = module.params.get("interval")
+    timeout = module.params.get("timeout")
 
     subnet = None
     present = state == "present"
-
-    subnet = client.get_subnet_by_uuid(subnet_uuid)
+    if subnet_uuid:
+        if not is_uuid_like(subnet_uuid):
+            raise ValueError("Invalid subnet UUID format")
+        subnet = openstack_subnets_retrieve.sync(
+            client=client,
+            uuid=subnet_uuid,
+        )
     if subnet:
         if present:
-            checked_fields = {
-                k: v
-                for k, v in subnet.items()
-                if k
-                in [
-                    "name",
-                    "tenant",
-                    "gateway_ip",
-                    "disable_gateway",
-                    "enable_dhcp",
-                    "dns_nameservers",
-                    "connect_subnet",
-                    "disconnect_subnet",
-                    "unlink_subnet",
-                ]
-            }
-            local_fields = [
-                name,
-                tenant,
-                gateway_ip,
-                disable_gateway,
-                enable_dhcp,
-                dns_nameservers,
-                connect_subnet,
-                disconnect_subnet,
-                unlink_subnet,
-            ]
-
-            if compare_fields(checked_fields, local_fields):
-                has_changed = False
+            if connect_subnet:
+                openstack_subnets_connect.sync_detailed(
+                    client=client,
+                    uuid=subnet_uuid,
+                )
+                has_changed = True
+            elif disconnect_subnet:
+                openstack_subnets_disconnect.sync_detailed(
+                    client=client,
+                    uuid=subnet_uuid,
+                )
+                has_changed = True
+            elif unlink_subnet:
+                openstack_subnets_unlink.sync_detailed(
+                    client=client,
+                    uuid=subnet_uuid,
+                )
+                has_changed = True
             else:
-                if not compare_fields(checked_fields, local_fields):
-                    client.update_subnet(
+                local_fields = {
+                    "name": name,
+                    "gateway_ip": gateway_ip,
+                    "disable_gateway": disable_gateway,
+                    "dns_nameservers": dns_nameservers,
+                }
+                if fields_match(subnet, local_fields):
+                    has_changed = False
+                else:
+                    update_data = {
+                        "name": name or subnet.name,
+                        "gateway_ip": gateway_ip or subnet.gateway_ip,
+                        "disable_gateway": disable_gateway or subnet.disable_gateway,
+                        "dns_nameservers": dns_nameservers or subnet.dns_nameservers,
+                    }
+
+                    openstack_subnets_update.sync(
+                        client=client,
                         uuid=subnet_uuid,
-                        name=name,
-                        tenant=tenant,
-                        gateway_ip=gateway_ip,
-                        disable_gateway=disable_gateway,
-                        enable_dhcp=enable_dhcp,
-                        dns_nameservers=dns_nameservers,
-                        connect_subnet=connect_subnet,
-                        disconnect_subnet=disconnect_subnet,
-                        unlink_subnet=unlink_subnet,
+                        body=OpenStackSubNetRequest(**update_data),
                     )
                     has_changed = True
 
     else:
         if present:
-            subnet = client.create_subnet(
-                name=name,
-                tenant=tenant,
-                project=project,
-                network_uuid=network_uuid,
-                cidr=cidr,
-                allocation_pools=allocation_pools,
-                enable_dhcp=enable_dhcp,
-                dns_nameservers=dns_nameservers,
-                disable_gateway=disable_gateway,
-                gateway_ip=gateway_ip,
-                wait=module.params["wait"],
-                interval=module.params["interval"],
-                timeout=module.params["timeout"],
+            if not is_uuid_like(network_uuid):
+                raise ValueError("Invalid network UUID format")
+            request_args = {}
+            if allocation_pools:
+                request_args["allocation_pools"] = allocation_pools
+            if dns_nameservers:
+                request_args["dns_nameservers"] = dns_nameservers
+            if cidr:
+                request_args["cidr"] = cidr
+            if disable_gateway:
+                request_args["disable_gateway"] = disable_gateway
+            if gateway_ip:
+                request_args["gateway_ip"] = gateway_ip
+            if name:
+                request_args["name"] = name
+            subnet = openstack_networks_create_subnet.sync(
+                client=client,
+                uuid=network_uuid,
+                body=OpenStackSubNetRequest(
+                    **request_args,
+                ),
             )
-        has_changed = True
-
-    return subnet, has_changed
+            if wait:
+                wait_for_subnet(client, network_uuid, interval, timeout)
+            has_changed = True
+    return has_changed
 
 
 def main():
     fields = waldur_resource_argument_spec(
         subnet_uuid=dict(type="str"),
         name=dict(type="str", required=False),
-        tenant=dict(type="str", required=False),
-        project=dict(type="str", required=False),
         network_uuid=dict(type="str", required=False),
         cidr=dict(type="str", required=False),
         allocation_pools=dict(type="str", required=False),
-        enable_dhcp=dict(type="bool", required=False, default=True),
         dns_nameservers=dict(type="list", required=False),
         disable_gateway=dict(type="str", required=False),
         gateway_ip=dict(type="str", required=False),
@@ -261,14 +286,14 @@ def main():
         argument_spec=fields,
     )
 
-    client = waldur_client_from_module(module)
+    client = get_client(module)
 
     gateway_ip = module.params.get("gateway_ip")
-    disable_gateway = module.params.get("gateway_ip")
+    disable_gateway = module.params.get("disable_gateway")
 
     try:
         has_changed = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except (UnexpectedStatus, ValueError, TimeoutError, ResourceError) as e:
         module.fail_json(msg=str(e))
     if gateway_ip:
         if disable_gateway is True:
