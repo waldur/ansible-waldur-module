@@ -2,10 +2,12 @@
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
 from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
     waldur_full_argument_spec,
 )
+from ansible_waldur_module.utils import get_argument_spec, get_client, is_uuid_like
+from waldur_api_client.api.openstack_subnets import openstack_subnets_list
+from waldur_api_client.api.openstack_subnets import openstack_subnets_retrieve
+from waldur_api_client.errors import UnexpectedStatus
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -69,9 +71,21 @@ def send_request_to_waldur(client, module):
     tenant_uuid = module.params["tenant_uuid"]
     subnet_uuid = module.params["subnet_uuid"]
     if subnet_uuid:
-        return [client.get_subnet_by_uuid(subnet_uuid)]
+        if not is_uuid_like(subnet_uuid):
+            raise ValueError("Invalid subnet UUID format")
+        subnet = openstack_subnets_retrieve.sync(
+            client=client,
+            uuid=subnet_uuid,
+        )
+        return [subnet.to_dict()] if subnet else []
     else:
-        return client.list_tenant_subnets(tenant_uuid)
+        if not is_uuid_like(tenant_uuid):
+            raise ValueError("Invalid tenant UUID format")
+        subnets = openstack_subnets_list.sync(
+            client=client,
+            tenant_uuid=tenant_uuid,
+        )
+        return [subnet.to_dict() for subnet in subnets]
 
 
 def main():
@@ -79,13 +93,12 @@ def main():
         subnet_uuid=dict(required=False, type="str"),
         tenant_uuid=dict(required=True, type="str"),
     )
-    module = AnsibleModule(argument_spec=fields)
-
-    client = waldur_client_from_module(module)
+    module = AnsibleModule(get_argument_spec(**fields))
+    client = get_client(module)
 
     try:
         subnets = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except (UnexpectedStatus, ValueError, TimeoutError) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(subnets=subnets)
