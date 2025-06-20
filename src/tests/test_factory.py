@@ -15,6 +15,7 @@ import json
         models.PublicOfferingDetails,
         models.OrderCreate,
         models.OpenStackInstance,
+        models.OpenStackSubNet,
     ],
 )
 def test_multiple_models_serialization_cycle(model_class):
