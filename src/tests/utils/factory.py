@@ -59,13 +59,13 @@ def generate_value(attr_type: Any) -> Any:
                 return generate_example_instance(ref_cls)
             else:
                 return {}
-        if attr_type == str:
+        if attr_type is str:
             return fake.word()
-        elif attr_type == int:
+        elif attr_type is int:
             return random.randint(1, 100)
-        elif attr_type == float:
+        elif attr_type is float:
             return random.uniform(1.0, 100.0)
-        elif attr_type == bool:
+        elif attr_type is bool:
             return random.choice([True, False])
         elif attr_type == uuid.UUID:
             return uuid.uuid4()
