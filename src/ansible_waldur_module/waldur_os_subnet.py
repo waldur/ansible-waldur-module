@@ -7,8 +7,8 @@ from waldur_api_client.models.core_states import CoreStates
 from waldur_api_client.models.open_stack_sub_net import OpenStackSubNet
 from ansible_waldur_module.exceptions import (
     ResourceError,
-    ResourceNotFoundError,
-    ResourceStateError,
+    ObjectNotFoundError,
+    ObjectStateError,
 )
 from ansible_waldur_module.utils import (
     get_client,
@@ -149,9 +149,9 @@ def wait_for_subnet(
             uuid=network_uuid,
         )
         if not network:
-            raise ResourceNotFoundError("Network not found")
+            raise ObjectNotFoundError("Network not found")
         if network.state == CoreStates.ERRED:
-            raise ResourceStateError("Network is in an erred state")
+            raise ObjectStateError("Network is in an erred state")
         if network.state == CoreStates.OK:
             return True
         time.sleep(interval)

@@ -4,13 +4,13 @@ class ResourceError(Exception):
     pass
 
 
-class ResourceStateError(ResourceError):
+class ObjectStateError(ResourceError):
     """Raised when an instance is in an error state."""
 
     pass
 
 
-class ResourceNotFoundError(ResourceError):
+class ObjectNotFoundError(ResourceError):
     """Raised when an instance is not found."""
 
     pass

@@ -2,7 +2,7 @@
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
 import time
-from ansible_waldur_module.exceptions import ResourceError, ResourceStateError
+from ansible_waldur_module.exceptions import ResourceError, ObjectStateError
 from waldur_api_client.api.openstack_instances import (
     openstack_instances_list,
     openstack_instances_retrieve,
@@ -118,9 +118,7 @@ def is_instance_ready(client, instance_uuid):
         uuid=instance_uuid,
     )
     if instance.state == CoreStates.ERRED:
-        raise ResourceStateError(
-            f"Instance is in erred state: {instance.error_message}"
-        )
+        raise ObjectStateError(f"Instance is in erred state: {instance.error_message}")
     return instance.state == CoreStates.OK
 
 
@@ -131,7 +129,7 @@ def wait_for_instance(client, instance_uuid, interval=20, timeout=600):
             return True
         time.sleep(interval)
 
-    raise ResourceStateError(f"Instance '{instance_uuid}' has not reached stable state")
+    raise ObjectStateError(f"Instance '{instance_uuid}' has not reached stable state")
 
 
 def get_os_instance_by_name(client, instance_name, module):

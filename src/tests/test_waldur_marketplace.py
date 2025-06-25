@@ -9,7 +9,7 @@ from tests.utils.factory import generate_example_instance, serialize_attrs_insta
 import waldur_api_client.models as models
 import ansible_waldur_module.utils as utils
 from ansible_waldur_module.exceptions import (
-    ResourceNotFoundError,
+    ObjectNotFoundError,
 )
 
 
@@ -142,7 +142,7 @@ class OrderItemCreateTest(unittest.TestCase):
             params={"name_exact": self.TEST_PROJECT_NAME},
         ).mock(return_value=httpx.Response(status_code=200, json=[]))
 
-        with self.assertRaises(ResourceNotFoundError):
+        with self.assertRaises(ObjectNotFoundError):
             waldur_marketplace.send_request_to_waldur(self.client, self.module)
 
     def test_offering_not_found_with_sdk(self, mock_ansible_module):

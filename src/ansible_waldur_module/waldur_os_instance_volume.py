@@ -4,8 +4,8 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible_waldur_module.exceptions import (
     ResourceError,
     ResourceMultipleFoundError,
-    ResourceNotFoundError,
-    ResourceStateError,
+    ObjectNotFoundError,
+    ObjectStateError,
 )
 from waldur_api_client.errors import UnexpectedStatus
 from ansible_waldur_module.utils import (
@@ -117,7 +117,7 @@ def get_volume(client, volume_uuid, project_uuid):
             client=client, project=project_uuid.uuid, name=volume_uuid
         )
         if not volumes:
-            raise ResourceNotFoundError(f"Volume '{volume_uuid}' not found")
+            raise ObjectNotFoundError(f"Volume '{volume_uuid}' not found")
         if len(volumes) > 1:
             raise ResourceMultipleFoundError(
                 f"Multiple volumes found for '{volume_uuid}'"
@@ -129,7 +129,7 @@ def get_volume(client, volume_uuid, project_uuid):
 def is_volume_ready(client, volume_uuid):
     volume = openstack_volumes_retrieve.sync(client=client, uuid=volume_uuid)
     if volume.state == CoreStates.ERRED:
-        raise ResourceStateError(f"Volume is in erred state: {volume.error_message}")
+        raise ObjectStateError(f"Volume is in erred state: {volume.error_message}")
     return volume.state == CoreStates.OK
 
 
@@ -140,7 +140,7 @@ def wait_for_volume(client, volume_uuid, interval=20, timeout=600):
             return True
         time.sleep(interval)
 
-    raise ResourceStateError(f"Volume '{volume_uuid}' has not reached stable state")
+    raise ObjectStateError(f"Volume '{volume_uuid}' has not reached stable state")
 
 
 def send_request_to_waldur(client, module):
