@@ -3,7 +3,7 @@
 from ansible.module_utils.basic import AnsibleModule
 from ansible_waldur_module.exceptions import (
     ResourceError,
-    ResourceStateError,
+    ObjectStateError,
 )
 from waldur_api_client.api.openstack_volumes import openstack_volumes_list
 from waldur_api_client.api.openstack_volumes import openstack_volumes_snapshot
@@ -134,7 +134,7 @@ def wait_for_snapshot(client, snapshot_uuid, interval=20, timeout=600):
         snapshot = openstack_snapshots_retrieve.sync(client=client, uuid=snapshot_uuid)
 
         if snapshot.state == CoreStates.ERRED:
-            raise ResourceStateError(
+            raise ObjectStateError(
                 f"Snapshot is in erred state: {snapshot.error_message}"
             )
 
@@ -143,9 +143,7 @@ def wait_for_snapshot(client, snapshot_uuid, interval=20, timeout=600):
         time.sleep(interval)
         waited += interval
 
-    raise ResourceStateError(
-        f'Snapshot "{snapshot_uuid}" has not reached stable state.'
-    )
+    raise ObjectStateError(f'Snapshot "{snapshot_uuid}" has not reached stable state.')
 
 
 def send_request_to_waldur(client, module):

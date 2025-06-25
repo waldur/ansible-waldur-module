@@ -3,7 +3,7 @@
 import uuid
 from ansible_waldur_module.exceptions import (
     ResourceMultipleFoundError,
-    ResourceNotFoundError,
+    ObjectNotFoundError,
 )
 from waldur_api_client.client import AuthenticatedClient
 from waldur_api_client.api.projects import projects_list, projects_retrieve
@@ -51,6 +51,17 @@ def waldur_resource_argument_spec(**kwargs):
     return spec
 
 
+def convert_to_mb(gb_size):
+    try:
+        if gb_size < 1:
+            raise ValueError("Size must be at least 1 GB")
+        return gb_size * 1024
+    except (ValueError, TypeError) as e:
+        raise ValueError(
+            f"Invalid size value: {gb_size}. Size must be a positive number in GB. Caused by {e}"
+        )
+
+
 def is_uuid_like(val):
     """
     Check if value looks like a valid UUID.
@@ -70,7 +81,7 @@ def get_project(client: AuthenticatedClient, project: str):
         return projects_retrieve.sync(client=client, uuid=project)
     projects = projects_list.sync(client=client, name_exact=project)
     if not projects:
-        raise ResourceNotFoundError(f"Project '{project}' not found")
+        raise ObjectNotFoundError(f"Project '{project}' not found")
     if len(projects) > 1:
         raise ResourceMultipleFoundError(
             f"Multiple projects found with name '{project}'"
@@ -129,5 +140,5 @@ def get_os_instance(client, instance_name, project_name=None):
         client=client, name=instance_name, **kwargs
     )
     if not instances:
-        raise ResourceNotFoundError(f"Instance with name '{instance_name}' not found")
+        raise ObjectNotFoundError(f"Instance with name '{instance_name}' not found")
     return instances[0]

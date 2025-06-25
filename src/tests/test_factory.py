@@ -9,6 +9,9 @@ import json
     [
         models.Project,
         models.Offering,
+        models.OpenStackVolumeType,
+        models.OrderCreate,
+        models.Project,
         models.OpenStackSecurityGroup,
         models.OpenStackTenant,
         models.ProviderPlanDetails,
