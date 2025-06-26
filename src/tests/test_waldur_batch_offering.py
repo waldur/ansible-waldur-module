@@ -3,6 +3,7 @@ from unittest import mock
 import respx
 
 from ansible_waldur_module import waldur_batch_offering
+from ansible_waldur_module.utils import get_client
 
 
 @mock.patch("ansible_waldur_module.waldur_batch_offering.AnsibleModule")
@@ -112,11 +113,7 @@ class CreateOfferingTest(unittest.TestCase):
             },
         )
 
-        client = waldur_batch_offering.AuthenticatedClient(
-            base_url=self.module.params["api_url"],
-            token=self.module.params["access_token"],
-            prefix="Token",
-        )
+        client = get_client(self.module)
 
         offering, has_changed = waldur_batch_offering.send_request_to_waldur(
             client, self.module

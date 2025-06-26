@@ -1,12 +1,13 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_api_client import AuthenticatedClient
 from waldur_api_client.api.openstack_security_groups import (
     openstack_security_groups_list,
 )
 from waldur_api_client.errors import UnexpectedStatus
 from waldur_api_client.api.openstack_tenants import openstack_tenants_list
+
+from ansible_waldur_module.utils import get_client
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -97,10 +98,7 @@ def main():
     )
     module = AnsibleModule(argument_spec=fields)
 
-    client = AuthenticatedClient(
-        base_url=module.params["api_url"],
-        token=module.params["access_token"],
-    )
+    client = get_client(module)
 
     try:
         security_groups = send_request_to_waldur(client, module)

@@ -2,7 +2,6 @@
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible_waldur_module.exceptions import ObjectNotFoundError
-from waldur_api_client import AuthenticatedClient
 from waldur_api_client.errors import UnexpectedStatus
 from waldur_api_client.api.marketplace_provider_offerings import (
     marketplace_provider_offerings_create,
@@ -11,7 +10,7 @@ from waldur_api_client.api.marketplace_categories import (
     marketplace_categories_list,
 )
 from waldur_api_client.api.customers import customers_list
-from ansible_waldur_module.utils import get_argument_spec, is_uuid_like
+from ansible_waldur_module.utils import get_argument_spec, get_client, is_uuid_like
 from waldur_api_client.models import (
     OfferingCreateRequest,
     BaseProviderPlanRequest,
@@ -301,10 +300,7 @@ def main():
         argument_spec=get_argument_spec(**fields), supports_check_mode=True
     )
 
-    client = AuthenticatedClient(
-        base_url=module.params["api_url"],
-        token=module.params["access_token"],
-    )
+    client = get_client(module)
 
     try:
         offering, changed = send_request_to_waldur(client, module)

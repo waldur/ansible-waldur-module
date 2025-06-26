@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
+from typing import TypeGuard
 import uuid
 from ansible_waldur_module.exceptions import (
     ResourceMultipleFoundError,
@@ -62,7 +63,7 @@ def convert_to_mb(gb_size):
         )
 
 
-def is_uuid_like(val):
+def is_uuid_like(val) -> TypeGuard[uuid.UUID]:
     """
     Check if value looks like a valid UUID.
     """

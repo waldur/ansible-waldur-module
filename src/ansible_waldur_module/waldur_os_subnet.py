@@ -224,17 +224,15 @@ def send_request_to_waldur(client: AuthenticatedClient, module):
                 if fields_match(subnet, local_fields):
                     has_changed = False
                 else:
-                    update_data = {
-                        "name": name or subnet.name,
-                        "gateway_ip": gateway_ip or subnet.gateway_ip,
-                        "disable_gateway": disable_gateway or subnet.disable_gateway,
-                        "dns_nameservers": dns_nameservers or subnet.dns_nameservers,
-                    }
-
                     openstack_subnets_update.sync(
                         client=client,
                         uuid=subnet_uuid,
-                        body=OpenStackSubNetRequest(**update_data),
+                        body=OpenStackSubNetRequest(
+                            name=name or subnet.name,
+                            gateway_ip=gateway_ip or subnet.gateway_ip,
+                            disable_gateway=disable_gateway or subnet.disable_gateway,
+                            dns_nameservers=dns_nameservers or subnet.dns_nameservers,
+                        ),
                     )
                     has_changed = True
 
@@ -242,24 +240,16 @@ def send_request_to_waldur(client: AuthenticatedClient, module):
         if present:
             if not is_uuid_like(network_uuid):
                 raise ValueError("Invalid network UUID format")
-            request_args = {}
-            if allocation_pools:
-                request_args["allocation_pools"] = allocation_pools
-            if dns_nameservers:
-                request_args["dns_nameservers"] = dns_nameservers
-            if cidr:
-                request_args["cidr"] = cidr
-            if disable_gateway:
-                request_args["disable_gateway"] = disable_gateway
-            if gateway_ip:
-                request_args["gateway_ip"] = gateway_ip
-            if name:
-                request_args["name"] = name
             subnet = openstack_networks_create_subnet.sync(
                 client=client,
                 uuid=network_uuid,
                 body=OpenStackSubNetRequest(
-                    **request_args,
+                    allocation_pools=allocation_pools,
+                    dns_nameservers=dns_nameservers,
+                    cidr=cidr,
+                    disable_gateway=disable_gateway,
+                    gateway_ip=gateway_ip,
+                    name=name,
                 ),
             )
             if wait:

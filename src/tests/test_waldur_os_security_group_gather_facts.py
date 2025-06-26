@@ -3,6 +3,7 @@ from unittest import mock
 import respx
 
 from ansible_waldur_module import waldur_os_security_group_gather_facts
+from ansible_waldur_module.utils import get_client
 from tests.utils.factory import generate_example_instance, serialize_attrs_instance
 import waldur_api_client.models as models
 
@@ -27,11 +28,7 @@ class TestWaldurOsSecurityGroupGatherFacts(unittest.TestCase):
             "name": self.TEST_GROUP_NAME,
             "tenant": self.TEST_TENANT_NAME,
         }
-        self.client = waldur_os_security_group_gather_facts.AuthenticatedClient(
-            base_url=self.module.params["api_url"],
-            token=self.module.params["access_token"],
-            prefix="Token",
-        )
+        self.client = get_client(self.module)
 
     def tearDown(self):
         respx.stop()
