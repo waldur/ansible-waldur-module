@@ -100,8 +100,6 @@ def main():
     client = AuthenticatedClient(
         base_url=module.params["api_url"],
         token=module.params["access_token"],
-        prefix="Token",
-        raise_on_unexpected_status=True,
     )
 
     try:

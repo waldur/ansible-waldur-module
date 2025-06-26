@@ -1033,14 +1033,14 @@ test = ["covdefaults (>=2.3)", "coverage (>=7.2.7)", "coverage-enable-subprocess
 
 [[package]]
 name = "waldur-api-client"
-version = "0.1.0"
+version = "0.2.0"
 description = "A client library for accessing Waldur API"
 optional = false
 python-versions = "<4.0,>=3.9"
 groups = ["main"]
 files = [
-    {file = "waldur_api_client-0.1.0-py3-none-any.whl", hash = "sha256:870276adcaa73a3314b220f6b1e4b13396a5a0e7b05a43964c0da26dc0dab747"},
-    {file = "waldur_api_client-0.1.0.tar.gz", hash = "sha256:dc8ce37bc676f15b35646018b0c4f3f8e4c687b56aeff64edfb8bae8936495b1"},
+    {file = "waldur_api_client-0.2.0-py3-none-any.whl", hash = "sha256:b977fcc948d4f9fdfcd312d5c2c5994b1037bf5ac2a6d1e14c1996b472958f53"},
+    {file = "waldur_api_client-0.2.0.tar.gz", hash = "sha256:2fb093feb3dbe179ca58dc71f96a8f3b2afd61968ae2e5969c83e1a42e463008"},
 ]
 
 [package.dependencies]
@@ -1051,4 +1051,4 @@ python-dateutil = ">=2.8.0,<3.0.0"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<4.0"
-content-hash = "c285067da5b33523f990dfc915b6560b1e652d23574b37ee753cac7e9a01e3c0"
+content-hash = "238d4c13c8fa0b8119f083815ffb4249eef040d681800808fc72f84cdc55fb42"
