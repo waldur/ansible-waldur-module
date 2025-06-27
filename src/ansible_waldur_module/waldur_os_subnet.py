@@ -2,6 +2,7 @@
 # has to be a full import due to Ansible 2.0 compatibility
 
 from ansible.module_utils.basic import AnsibleModule
+from waldur_api_client.types import UNSET
 from waldur_api_client.client import AuthenticatedClient
 from waldur_api_client.models.core_states import CoreStates
 from waldur_api_client.models.open_stack_sub_net import OpenStackSubNet
@@ -244,11 +245,11 @@ def send_request_to_waldur(client: AuthenticatedClient, module):
                 client=client,
                 uuid=network_uuid,
                 body=OpenStackSubNetRequest(
-                    allocation_pools=allocation_pools,
-                    dns_nameservers=dns_nameservers,
-                    cidr=cidr,
-                    disable_gateway=disable_gateway,
-                    gateway_ip=gateway_ip,
+                    allocation_pools=allocation_pools or UNSET,
+                    dns_nameservers=dns_nameservers or UNSET,
+                    cidr=cidr or UNSET,
+                    disable_gateway=disable_gateway or UNSET,
+                    gateway_ip=gateway_ip or UNSET,
                     name=name,
                 ),
             )
