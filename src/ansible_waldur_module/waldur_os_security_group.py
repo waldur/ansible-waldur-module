@@ -2,14 +2,52 @@
 # has to be a full import due to Ansible 2.0 compatibility
 import copy
 from ipaddress import AddressValueError, IPv4Interface, IPv6Interface, NetmaskValueError
+from typing import Any
 
 from ansible.errors import AnsibleError
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_resource_argument_spec,
+from ansible_waldur_module.exceptions import (
+    ObjectStateError,
+    ObjectNotFoundError,
+    ResourceMultipleFoundError,
 )
+from ansible_waldur_module.utils import (
+    get_client,
+    waldur_resource_argument_spec,
+    is_uuid_like,
+)
+from waldur_api_client.api.openstack_security_groups import (
+    openstack_security_groups_destroy,
+    openstack_security_groups_list,
+    openstack_security_groups_set_rules,
+    openstack_security_groups_update,
+)
+from waldur_api_client.api.openstack_security_groups import (
+    openstack_security_groups_retrieve,
+)
+from waldur_api_client.api.openstack_tenants import (
+    openstack_tenants_create_security_group,
+    openstack_tenants_list,
+)
+from waldur_api_client.errors import UnexpectedStatus
+from waldur_api_client.models.open_stack_security_group_request import (
+    OpenStackSecurityGroupRequest,
+)
+from waldur_api_client.models.open_stack_security_group_rule_create_request import (
+    OpenStackSecurityGroupRuleCreateRequest,
+)
+from waldur_api_client.models.open_stack_security_group_rule_update_request import (
+    OpenStackSecurityGroupRuleUpdateRequest,
+)
+from waldur_api_client.models.open_stack_security_group_update_request import (
+    OpenStackSecurityGroupUpdateRequest,
+)
+from waldur_api_client.models.direction_enum import DirectionEnum
+from waldur_api_client.models.ethertype_enum import EthertypeEnum
+from waldur_api_client.models.protocol_enum import ProtocolEnum
+from waldur_api_client.models.core_states import CoreStates
+from waldur_api_client.api.marketplace_resources import marketplace_resources_retrieve
+import time
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -74,6 +112,10 @@ options:
     description:
       - The name of the tenant to create a security group for.
     required: true
+  waldur_resource:
+    description:
+      - The uuid of the waldur resource to create a security group for.
+    required: false
   timeout:
     default: 600
     description:
@@ -313,29 +355,157 @@ def compare_description(description_1, description_2):
     return False
 
 
-def get_tenant_uuid(client, waldur_resource_uuid):
-    response = client.get_marketplace_resource(waldur_resource_uuid)
-    scope_url = response["scope"]
-    response = client._get(scope_url, valid_states=[200])
-    return response["uuid"]
+def prepare_rules_for_sdk(
+    rules: list[dict], update: bool
+) -> list[OpenStackSecurityGroupRuleUpdateRequest]:
+    sdk_rules: list[OpenStackSecurityGroupRuleUpdateRequest] = []
+    for rule in rules:
+        try:
+            protocol_enum = ProtocolEnum(rule["protocol"])
+        except ValueError:
+            raise ValueError(
+                f"Invalid protocol rule for enum conversion: {rule}. Supported protocols: tcp, udp, icmp"
+            )
+
+        try:
+            direction_enum = DirectionEnum(rule.get("direction", "ingress"))
+        except ValueError:
+            raise ValueError(
+                f"Invalid direction rule for enum conversion: {rule}. Supported directions: ingress, egress"
+            )
+
+        try:
+            ethertype_enum = EthertypeEnum(rule.get("ethertype", "IPv4"))
+        except ValueError:
+            raise ValueError(
+                f"Invalid ethertype rule for enum conversion: {rule}. Supported ethertypes: IPv4, IPv6"
+            )
+
+        if update:
+            sdk_rule = OpenStackSecurityGroupRuleUpdateRequest(
+                from_port=int(rule["from_port"]),
+                to_port=int(rule["to_port"]),
+                protocol=protocol_enum,
+                direction=direction_enum,
+                ethertype=ethertype_enum,
+                cidr=rule.get("cidr"),
+                remote_group=rule.get("remote_group")
+                if "remote_group" in rule
+                else None,
+                description=rule.get("description", ""),
+            )
+        else:
+            sdk_rule = OpenStackSecurityGroupRuleCreateRequest(
+                from_port=int(rule["from_port"]),
+                to_port=int(rule["to_port"]),
+                protocol=protocol_enum,
+                direction=direction_enum,
+                ethertype=ethertype_enum,
+                cidr=rule.get("cidr"),
+                remote_group=rule.get("remote_group")
+                if "remote_group" in rule
+                else None,
+                description=rule.get("description", ""),
+            )
+        sdk_rules.append(sdk_rule)
+    return sdk_rules
+
+
+def get_tenant_uuid(client, tenant_name):
+    """Get tenant UUID by name"""
+    tenants = openstack_tenants_list.sync(
+        client=client,
+        name_exact=tenant_name,
+    )
+
+    if not tenants:
+        raise ObjectNotFoundError(f"Tenant with name '{tenant_name}' not found")
+    if len(tenants) > 1:
+        raise ResourceMultipleFoundError(
+            f"Multiple tenants found with name '{tenant_name}'"
+        )
+    return tenants[0].uuid
+
+
+def get_tenant_uuid_by_resource(client, resource_uuid):
+    """Get tenant UUID by marketplace resource UUID"""
+    if not is_uuid_like(resource_uuid):
+        raise ValueError(f"Invalid resource UUID: {resource_uuid}")
+    waldur_resource = marketplace_resources_retrieve.sync(
+        client=client, uuid=resource_uuid
+    )
+    if not waldur_resource:
+        raise ObjectNotFoundError(
+            f"Marketplace resource with UUID {resource_uuid} not found"
+        )
+    scope = waldur_resource.scope
+    if not scope:
+        raise ValueError(
+            f"Marketplace resource with UUID {resource_uuid} has no scope, unable to retrieve tenant UUID"
+        )
+    tenant_uuid = scope.rstrip("/").rsplit("/")[-1]
+    if not is_uuid_like(tenant_uuid):
+        raise ValueError(
+            f"Invalid tenant UUID extracted from resource scope: {tenant_uuid}"
+        )
+    return tenant_uuid
+
+
+def get_security_group(client, tenant_uuid, name):
+    """Get security group by name for a specific tenant"""
+    security_groups = openstack_security_groups_list.sync(
+        client=client,
+        tenant_uuid=tenant_uuid,
+        name_exact=name,
+    )
+
+    if security_groups:
+        return security_groups[0]
+    return None
+
+
+def wait_for_security_group(client, security_group_uuid, interval=20, timeout=600):
+    waited = 0
+    while waited < timeout:
+        security_group = openstack_security_groups_retrieve.sync(
+            client=client, uuid=security_group_uuid
+        )
+        if not security_group:
+            raise ObjectNotFoundError(
+                f"Security group with UUID {security_group_uuid} not found"
+            )
+        if security_group.state == CoreStates.ERRED:
+            raise ObjectStateError(
+                f"Security group is in erred state: {security_group.error_message}"
+            )
+
+        if security_group.state == CoreStates.OK:
+            return True
+        time.sleep(interval)
+        waited += interval
+
+    raise ObjectStateError(
+        f'Security group "{security_group_uuid}" has not reached stable state.'
+    )
 
 
 def send_request_to_waldur(client, module):
     has_changed = False
     tenant = module.params.get("tenant")
     waldur_resource = module.params.get("waldur_resource")
-
+    wait = module.params.get("wait")
+    interval = module.params.get("interval")
+    timeout = module.params.get("timeout")
     if not tenant and not waldur_resource:
         raise AnsibleError("Tenant or waldur_resource must be specified.")
 
     if not tenant:
-        tenant = get_tenant_uuid(client, waldur_resource)
-
-    project = module.params.get("project")
+        tenant_uuid = get_tenant_uuid_by_resource(client, waldur_resource)
+    else:
+        tenant_uuid = get_tenant_uuid(client, tenant)
     name = module.params["name"]
     description = module.params.get("description") or ""
-    rules = module.params["rules"]
-
+    rules: list[dict[str, Any]] = module.params["rules"]
     for rule in rules:
         for item in ["from_port", "to_port", "protocol"]:
             if item not in rule:
@@ -347,8 +517,12 @@ def send_request_to_waldur(client, module):
             )
 
         if "remote_group" in rule:
-            remote_group = client.get_security_group(tenant, rule["remote_group"])
-            rule["remote_group"] = remote_group["url"]
+            remote_group = get_security_group(client, tenant_uuid, rule["remote_group"])
+            if not remote_group:
+                raise ObjectNotFoundError(
+                    f"Remote security group with name '{rule['remote_group']}' not found"
+                )
+            rule["remote_group"] = remote_group.url
         elif "cidr" in rule:
             address = rule["cidr"]
             if "ethertype" not in rule or rule["ethertype"] == "IPv4":
@@ -377,7 +551,7 @@ def send_request_to_waldur(client, module):
                     % rule["direction"]
                 )
 
-    security_group = client.get_security_group(tenant, name)
+    security_group = get_security_group(client, tenant_uuid, name)
     present = module.params["state"] == "present"
 
     if security_group:
@@ -385,7 +559,7 @@ def send_request_to_waldur(client, module):
             rules_comp = [
                 {
                     k: v
-                    for k, v in rule.items()
+                    for k, v in rule.to_dict().items()
                     if k
                     in [
                         "from_port",
@@ -398,37 +572,57 @@ def send_request_to_waldur(client, module):
                         "remote_group",
                     ]
                 }
-                for rule in security_group["rules"]
+                for rule in security_group.rules
             ]
             if compare_description(
-                security_group["description"], description
+                security_group.description, description
             ) and compare_rules(rules, rules_comp):
                 has_changed = False
             else:
-                if not compare_description(security_group["description"], description):
-                    client.update_security_group_description(
-                        security_group, description
+                if not compare_description(security_group.description, description):
+                    update_request = OpenStackSecurityGroupUpdateRequest(
+                        name=name, description=description
+                    )
+                    openstack_security_groups_update.sync(
+                        client=client,
+                        uuid=security_group.uuid,
+                        body=update_request,
                     )
                     has_changed = True
 
                 if not compare_rules(rules, rules_comp):
-                    client.update_security_group_rules(security_group, rules)
+                    update_rules: list[OpenStackSecurityGroupRuleUpdateRequest] = (
+                        prepare_rules_for_sdk(rules, update=True)
+                    )
+                    openstack_security_groups_set_rules.sync_detailed(
+                        client=client,
+                        uuid=security_group.uuid,
+                        body=update_rules,
+                    )
                     has_changed = True
         else:
-            client.delete_security_group(security_group["uuid"])
+            openstack_security_groups_destroy.sync_detailed(
+                client=client,
+                uuid=security_group.uuid,
+            )
             has_changed = True
     elif present:
-        client.create_security_group(
-            project=project,
-            tenant=tenant,
+        create_rules: list[OpenStackSecurityGroupRuleUpdateRequest] = (
+            prepare_rules_for_sdk(rules, update=False)
+        )
+        create_request = OpenStackSecurityGroupRequest(
             name=name,
             description=description,
-            rules=rules,
-            tags=module.params.get("tags"),
-            wait=module.params["wait"],
-            interval=module.params["interval"],
-            timeout=module.params["timeout"],
+            rules=create_rules,
         )
+
+        security_group = openstack_tenants_create_security_group.sync(
+            client=client,
+            uuid=tenant_uuid,
+            body=create_request,
+        )
+        if wait:
+            wait_for_security_group(client, security_group.uuid, interval, timeout)
         has_changed = True
 
     return has_changed
@@ -445,11 +639,17 @@ def main():
         argument_spec=fields,
     )
 
-    client = waldur_client_from_module(module)
+    client = get_client(module)
 
     try:
         has_changed = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except (
+        UnexpectedStatus,
+        ObjectNotFoundError,
+        ObjectStateError,
+        ResourceMultipleFoundError,
+        ValueError,
+    ) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(changed=has_changed)

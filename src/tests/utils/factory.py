@@ -38,7 +38,7 @@ def serialize_value(inst, attr, value):
         return str(value)
     elif isinstance(value, datetime.datetime):
         return value.isoformat()
-    if attr.name == "type_":
+    if attr and attr.name == "type_":
         return value
     return value
 
