@@ -1,7 +1,12 @@
 import unittest
 from unittest import mock
+import respx
+import uuid
 
 from ansible_waldur_module import waldur_os_security_group
+from ansible_waldur_module.utils import get_client
+from tests.utils.factory import generate_example_instance, serialize_attrs_instance
+import waldur_api_client.models as models
 
 WEB = {
     "url": "api/123",
@@ -40,8 +45,64 @@ def fail_side_effect(*args, **kwargs):
     raise Exception(kwargs["msg"])
 
 
+BASE_URL = "https://waldur.example.com"
+
+
+def mock_tenant_lookup(tenant_dict, tenant_name="tenant"):
+    """Mock tenant lookup by name"""
+    respx.get(
+        f"{BASE_URL}/api/openstack-tenants/",
+        params={"name_exact": tenant_name},
+    ).respond(200, json=[tenant_dict])
+
+
+def mock_tenant_lookup_by_resource(resource_dict):
+    """Mock tenant lookup by resource UUID (no name_exact param)"""
+    respx.get(
+        f"{BASE_URL}/api/marketplace-resources/{resource_dict['uuid']}/",
+    ).respond(200, json=resource_dict)
+
+
+def mock_security_group_lookup(tenant_uuid, group_name, security_groups=None):
+    """Mock security group lookup"""
+    if security_groups is None:
+        security_groups = []
+    respx.get(
+        f"{BASE_URL}/api/openstack-security-groups/",
+        params={"tenant_uuid": tenant_uuid, "name_exact": group_name},
+    ).respond(200, json=security_groups)
+
+
+def mock_security_group_creation(tenant_uuid, response_dict):
+    """Mock security group creation"""
+    return respx.post(
+        f"{BASE_URL}/api/openstack-tenants/{tenant_uuid}/create_security_group/",
+    ).respond(201, json=response_dict)
+
+
+def create_mock_security_group(name, description="descr", rules=None):
+    """Create a mock security group instance"""
+    if rules is None:
+        rules = []
+    security_group = generate_example_instance(models.OpenStackSecurityGroup)
+    security_group.uuid = str(uuid.uuid4())
+    security_group.name = name
+    security_group.description = description
+    security_group.rules = rules
+    return serialize_attrs_instance(security_group)
+
+
 class SecurityGroupCreateTest(unittest.TestCase):
     def setUp(self) -> None:
+        respx.start()
+
+        tenant = generate_example_instance(models.OpenStackTenant)
+        tenant.uuid = str(uuid.uuid4())
+        tenant.name = "tenant"
+        self.tenant_dict = serialize_attrs_instance(tenant)
+
+        self.security_group_dict = create_mock_security_group("sec-group")
+
         self.create_sg_call_kwargs = dict(
             project=None,
             tenant="tenant",
@@ -57,28 +118,27 @@ class SecurityGroupCreateTest(unittest.TestCase):
         module = mock.Mock()
         module.params = {
             "access_token": "token",
-            "api_url": "api",
+            "api_url": BASE_URL,
             "tenant": "tenant",
             "description": "descr",
             "state": "present",
             "name": "sec-group",
-            "wait": True,
+            "wait": False,
             "interval": 20,
             "timeout": 600,
         }
         module.check_mode = False
         self.module = module
+        self.client = get_client(module)
 
-        self.client = mock.Mock()
+    def tearDown(self) -> None:
+        respx.stop()
 
     def check_successful_function_call(self):
         has_changed = waldur_os_security_group.send_request_to_waldur(
             self.client, self.module
         )
 
-        self.client.create_security_group.assert_called_once_with(
-            **self.create_sg_call_kwargs
-        )
         self.assertTrue(has_changed)
 
     def check_unsuccessful_function_call(self, msg):
@@ -102,25 +162,28 @@ class SecurityGroupCreateTest(unittest.TestCase):
             }
         ]
 
-        self.client.get_security_group.side_effect = [WEB, None]
+        mock_tenant_lookup(self.tenant_dict)
 
-        self.create_sg_call_kwargs["rules"].append(
-            {
-                "from_port": "80",
-                "to_port": "80",
-                "remote_group": "api/123",
-                "protocol": "tcp",
-                "direction": "ingress",
-            }
+        remote_sg = create_mock_security_group("web")
+        remote_sg["url"] = "api/123"
+        mock_security_group_lookup(self.tenant_dict["uuid"], "web", [remote_sg])
+
+        mock_security_group_lookup(self.tenant_dict["uuid"], "sec-group", [])
+
+        create_request = mock_security_group_creation(
+            self.tenant_dict["uuid"], self.security_group_dict
         )
 
         self.check_successful_function_call()
+        self.assertEqual(1, create_request.call_count)
 
     def test_if_marketplace_resource_uuid_has_been_passed(self):
-        self.client.get_marketplace_resource.return_value = {
-            "scope": "http://exapmle.com/api/model/tenant/"
-        }
-        self.client._get.return_value = {"uuid": "tenant"}
+        tenant_with_resource = generate_example_instance(models.OpenStackTenant)
+        tenant_with_resource.uuid = str(uuid.uuid4())
+        resource_uuid = uuid.uuid4().hex
+        tenant_with_resource.marketplace_resource_uuid = resource_uuid
+        tenant_with_resource_dict = serialize_attrs_instance(tenant_with_resource)
+
         self.module.params["rules"] = [
             {
                 "from_port": "80",
@@ -131,29 +194,36 @@ class SecurityGroupCreateTest(unittest.TestCase):
         ]
 
         self.module.params.pop("tenant")
-        self.module.params["waldur_resource"] = "waldur_resource_uuid"
+        self.module.params["waldur_resource"] = resource_uuid
+        waldur_resource = generate_example_instance(models.Resource)
+        waldur_resource.uuid = resource_uuid
+        waldur_resource.scope = (
+            f"{BASE_URL}/api/openstack-tenants/{tenant_with_resource_dict['uuid']}/"
+        )
+        waldur_resource_dict = serialize_attrs_instance(waldur_resource)
+        mock_tenant_lookup_by_resource(waldur_resource_dict)
+        remote_sg = create_mock_security_group("web")
+        remote_sg["url"] = "api/123"
+        mock_security_group_lookup(
+            tenant_with_resource_dict["uuid"], "web", [remote_sg]
+        )
 
-        self.client.get_security_group.side_effect = [WEB, None]
+        mock_security_group_lookup(tenant_with_resource_dict["uuid"], "sec-group", [])
 
-        self.create_sg_call_kwargs["rules"].append(
-            {
-                "from_port": "80",
-                "to_port": "80",
-                "remote_group": "api/123",
-                "protocol": "tcp",
-                "direction": "ingress",
-            }
+        create_request = mock_security_group_creation(
+            tenant_with_resource_dict["uuid"], self.security_group_dict
         )
 
         self.check_successful_function_call()
-        self.client.get_marketplace_resource.assert_called_once()
+        self.assertEqual(1, create_request.call_count)
 
     def test_group_creation_erred_with_invalid_params(self):
         self.module.params["rules"] = [
             {"from_port": "80", "to_port": "80", "protocol": "tcp"}
         ]
-
         self.module.fail_json.side_effect = fail_side_effect
+
+        mock_tenant_lookup(self.tenant_dict)
 
         self.check_unsuccessful_function_call(
             "Either cidr or remote_group must be specified."
@@ -169,20 +239,15 @@ class SecurityGroupCreateTest(unittest.TestCase):
             }
         ]
 
-        self.client.get_security_group.return_value = None
+        mock_tenant_lookup(self.tenant_dict)
+        mock_security_group_lookup(self.tenant_dict["uuid"], "sec-group", [])
 
-        self.create_sg_call_kwargs["rules"].append(
-            {
-                "from_port": "80",
-                "to_port": "80",
-                "cidr": "192.168.0.0/28",
-                "protocol": "tcp",
-                "ethertype": "IPv4",
-                "direction": "ingress",
-            }
+        create_request = mock_security_group_creation(
+            self.tenant_dict["uuid"], self.security_group_dict
         )
 
         self.check_successful_function_call()
+        self.assertEqual(1, create_request.call_count)
 
     def test_group_creation_with_valid_ipv6_cidr(self):
         self.module.params["rules"] = [
@@ -195,20 +260,15 @@ class SecurityGroupCreateTest(unittest.TestCase):
             }
         ]
 
-        self.client.get_security_group.return_value = None
+        mock_tenant_lookup(self.tenant_dict)
+        mock_security_group_lookup(self.tenant_dict["uuid"], "sec-group", [])
 
-        self.create_sg_call_kwargs["rules"].append(
-            {
-                "from_port": "80",
-                "to_port": "80",
-                "cidr": "2002::/16",
-                "protocol": "tcp",
-                "ethertype": "IPv6",
-                "direction": "ingress",
-            }
+        create_request = mock_security_group_creation(
+            self.tenant_dict["uuid"], self.security_group_dict
         )
 
         self.check_successful_function_call()
+        self.assertEqual(1, create_request.call_count)
 
     def test_group_creation_with_invalid_v6_address(self):
         self.module.params["rules"] = [
@@ -220,8 +280,8 @@ class SecurityGroupCreateTest(unittest.TestCase):
                 "ethertype": "IPv6",
             }
         ]
-
-        self.check_unsuccessful_function_call("Invalid IPv6 address.")
+        mock_tenant_lookup(self.tenant_dict)
+        self.check_unsuccessful_function_call("Invalid IPv6 address")
 
     def test_group_creation_with_invalid_v4_address(self):
         self.module.params["rules"] = [
@@ -233,8 +293,8 @@ class SecurityGroupCreateTest(unittest.TestCase):
                 "ethertype": "IPv4",
             }
         ]
-
-        self.check_unsuccessful_function_call("Invalid IPv4 address.")
+        mock_tenant_lookup(self.tenant_dict)
+        self.check_unsuccessful_function_call("Invalid IPv4 address")
 
     def test_group_creation_with_invalid_ethertype(self):
         self.module.params["rules"] = [
@@ -246,7 +306,7 @@ class SecurityGroupCreateTest(unittest.TestCase):
                 "ethertype": "ABC",
             }
         ]
-
+        mock_tenant_lookup(self.tenant_dict)
         self.check_unsuccessful_function_call("Invalid ethertype")
 
     def test_group_creation_with_ingress_direction(self):
@@ -260,20 +320,15 @@ class SecurityGroupCreateTest(unittest.TestCase):
             }
         ]
 
-        self.client.get_security_group.return_value = None
+        mock_tenant_lookup(self.tenant_dict)
+        mock_security_group_lookup(self.tenant_dict["uuid"], "sec-group", [])
 
-        self.create_sg_call_kwargs["rules"].append(
-            {
-                "from_port": "80",
-                "to_port": "80",
-                "cidr": "192.168.0.0/28",
-                "protocol": "tcp",
-                "direction": "ingress",
-                "ethertype": "IPv4",
-            }
+        create_request = mock_security_group_creation(
+            self.tenant_dict["uuid"], self.security_group_dict
         )
 
         self.check_successful_function_call()
+        self.assertEqual(1, create_request.call_count)
 
     def test_group_creation_with_egress_direction(self):
         self.module.params["rules"] = [
@@ -286,20 +341,15 @@ class SecurityGroupCreateTest(unittest.TestCase):
             }
         ]
 
-        self.client.get_security_group.return_value = None
+        mock_tenant_lookup(self.tenant_dict)
+        mock_security_group_lookup(self.tenant_dict["uuid"], "sec-group", [])
 
-        self.create_sg_call_kwargs["rules"].append(
-            {
-                "from_port": "80",
-                "to_port": "80",
-                "cidr": "192.168.0.0/28",
-                "protocol": "tcp",
-                "direction": "egress",
-                "ethertype": "IPv4",
-            }
+        create_request = mock_security_group_creation(
+            self.tenant_dict["uuid"], self.security_group_dict
         )
 
         self.check_successful_function_call()
+        self.assertEqual(1, create_request.call_count)
 
     def test_group_creation_with_invalid_direction(self):
         self.module.params["rules"] = [
@@ -311,8 +361,10 @@ class SecurityGroupCreateTest(unittest.TestCase):
                 "direction": "invalid",
             }
         ]
-
-        self.check_unsuccessful_function_call("Invalid direction .")
+        mock_tenant_lookup(self.tenant_dict)
+        self.check_unsuccessful_function_call(
+            "Invalid direction invalid expected ingress or egress"
+        )
 
     def test_group_creation_if_group_already_exists(self):
         self.module.params["name"] = "ssh"
@@ -326,7 +378,14 @@ class SecurityGroupCreateTest(unittest.TestCase):
             }
         ]
 
-        self.client.get_security_group.side_effect = [WEB, SSH]
+        mock_tenant_lookup(self.tenant_dict)
+
+        remote_sg = create_mock_security_group("web")
+        remote_sg["url"] = "api/123"
+        mock_security_group_lookup(self.tenant_dict["uuid"], "web", [remote_sg])
+
+        existing_sg = create_mock_security_group("ssh", "descr", SSH["rules"])
+        mock_security_group_lookup(self.tenant_dict["uuid"], "ssh", [existing_sg])
 
         has_changed = waldur_os_security_group.send_request_to_waldur(
             self.client, self.module
