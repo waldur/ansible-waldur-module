@@ -1,12 +1,75 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    ObjectDoesNotExist,
-    WaldurClientException,
-    waldur_client_from_module,
-    waldur_resource_argument_spec,
+from ansible_waldur_module.exceptions import (
+    ObjectNotFoundError,
+    ResourceMultipleFoundError,
+    ObjectStateError,
 )
+from waldur_api_client import AuthenticatedClient
+from waldur_api_client.api.openstack_instances import (
+    openstack_instances_list,
+    openstack_instances_retrieve,
+    openstack_instances_update_security_groups,
+    openstack_instances_update_ports,
+    openstack_instances_stop,
+)
+from waldur_api_client.api.marketplace_resources import (
+    marketplace_resources_list,
+    marketplace_resources_terminate,
+)
+from waldur_api_client.errors import UnexpectedStatus
+from ansible_waldur_module.utils import (
+    get_argument_spec,
+    get_project,
+    get_offering,
+    is_uuid_like,
+    get_client,
+)
+from waldur_api_client.models.core_states import CoreStates
+from waldur_api_client.models.resource_terminate_request import ResourceTerminateRequest
+from waldur_api_client.models.open_stack_instance_security_groups_update_request import (
+    OpenStackInstanceSecurityGroupsUpdateRequest,
+)
+from waldur_api_client.models.open_stack_instance_ports_update_request import (
+    OpenStackInstancePortsUpdateRequest,
+)
+from waldur_api_client.models.open_stack_nested_port_request import (
+    OpenStackNestedPortRequest,
+)
+from waldur_api_client.api.marketplace_orders import (
+    marketplace_orders_create,
+    marketplace_orders_approve_by_consumer,
+)
+from waldur_api_client.models.order_create_request import OrderCreateRequest
+from waldur_api_client.models.order_create import OrderCreate
+from waldur_api_client.models.public_offering_details import PublicOfferingDetails
+import time
+from waldur_api_client.api.openstack_flavors import (
+    openstack_flavors_list,
+    openstack_flavors_retrieve,
+)
+from waldur_api_client.api.openstack_images import (
+    openstack_images_list,
+    openstack_images_retrieve,
+)
+from waldur_api_client.api.openstack_volume_types import (
+    openstack_volume_types_list,
+    openstack_volume_types_retrieve,
+)
+from waldur_api_client.api.openstack_security_groups import (
+    openstack_security_groups_list,
+    openstack_security_groups_retrieve,
+)
+from waldur_api_client.api.openstack_server_groups import (
+    openstack_server_groups_list,
+    openstack_server_groups_retrieve,
+)
+from waldur_api_client.api.keys import keys_list, keys_retrieve
+from waldur_api_client.models.openstack_flavors_list_o_item import (
+    OpenstackFlavorsListOItem,
+)
+
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -121,9 +184,6 @@ options:
   user_data:
     description:
       - An additional data that will be added to the instance on provisioning.
-  tags:
-    description:
-      - List of tags that will be added to the instance on provisioning.
   wait:
     default: true
     description:
@@ -194,8 +254,6 @@ EXAMPLES = """
         ssh_key: ssh1.pub
         subnet: vpc-1-tm-sub-net-2
         system_volume_size: 40
-        tags:
-            - ansible_application_id
         wait: false
 
 - name: Find flavor by CPU and RAM parameters
@@ -276,6 +334,232 @@ EXAMPLES = """
 """
 
 
+def is_instance_ready(client, instance_uuid):
+    instance = openstack_instances_retrieve.sync(
+        client=client,
+        uuid=instance_uuid,
+    )
+    if instance.state == CoreStates.ERRED:
+        raise ObjectStateError(f"Instance is in erred state: {instance.error_message}")
+    return instance.state == CoreStates.OK
+
+
+def wait_for_instance(client, instance_uuid, interval=20, timeout=600):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_instance_ready(client, instance_uuid):
+            return True
+        time.sleep(interval)
+
+    message = f"Instance '{instance_uuid}' has not reached stable state. Seconds passed: {timeout}"
+    raise TimeoutError(message)
+
+
+def get_instance_via_marketplace(client: AuthenticatedClient, name: str, project: str):
+    project_obj = get_project(client, project)
+
+    instance = None
+    instance_name = name
+
+    if is_uuid_like(name):
+        instance = openstack_instances_retrieve.sync(client=client, uuid=name)
+        instance_name = instance.name
+
+    resources = marketplace_resources_list.sync(
+        client=client,
+        project_uuid=project_obj.uuid,
+        name_exact=instance_name,
+        offering_type="OpenStackTenant.Instance",
+    )
+    if not resources:
+        raise ObjectNotFoundError(
+            f"Marketplace resource '{instance_name}' not found in project '{project}'"
+        )
+
+    resource = resources[0]
+
+    if instance is None:
+        instances = openstack_instances_list.sync(
+            client=client, project_uuid=project_obj.uuid, name_exact=instance_name
+        )
+        instance = instances[0] if instances else None
+    return resource, instance
+
+
+def get_flavor_url(client: AuthenticatedClient, flavor_identifier: str):
+    """Get flavor URL from identifier (name or UUID)."""
+    if is_uuid_like(flavor_identifier):
+        flavor = openstack_flavors_retrieve.sync(client=client, uuid=flavor_identifier)
+        if flavor is None:
+            raise ObjectNotFoundError(
+                f"Flavor with UUID '{flavor_identifier}' not found"
+            )
+        return flavor.url
+    else:
+        flavors = openstack_flavors_list.sync(
+            client=client,
+            name_exact=flavor_identifier,
+        )
+        if not flavors:
+            raise ObjectNotFoundError(
+                f"Flavor with name '{flavor_identifier}' not found"
+            )
+        if len(flavors) > 1:
+            raise ResourceMultipleFoundError(
+                f"Multiple flavors found with name '{flavor_identifier}'"
+            )
+        return flavors[0].url
+
+
+def get_flavor_url_from_params(
+    client: AuthenticatedClient, flavor_min_cpu: int, flavor_min_ram: int
+):
+    """Get flavor URL based on minimum CPU and RAM requirements."""
+    flavors = openstack_flavors_list.sync(
+        client=client,
+        o=[
+            OpenstackFlavorsListOItem.CORES,
+            OpenstackFlavorsListOItem.RAM,
+            OpenstackFlavorsListOItem.DISK,
+        ],
+        cores_gte=flavor_min_cpu,
+        ram_gte=flavor_min_ram,
+    )
+    if not flavors:
+        cpu_msg = f"cores >= {flavor_min_cpu}" if flavor_min_cpu else "any cores"
+        ram_msg = f"RAM >= {flavor_min_ram}" if flavor_min_ram else "any RAM"
+        raise ObjectNotFoundError(f"No flavor found with {cpu_msg} and {ram_msg}")
+    return flavors[0].url
+
+
+def get_image_url(client: AuthenticatedClient, image_identifier: str) -> str:
+    """Get image URL from identifier (name or UUID)."""
+    if is_uuid_like(image_identifier):
+        image = openstack_images_retrieve.sync(client=client, uuid=image_identifier)
+        if image is None:
+            raise ObjectNotFoundError(f"Image with UUID '{image_identifier}' not found")
+        return image.url
+    else:
+        images = openstack_images_list.sync(
+            client=client,
+            name_exact=image_identifier,
+        )
+        if not images:
+            raise ObjectNotFoundError(f"Image with name '{image_identifier}' not found")
+        if len(images) > 1:
+            raise ResourceMultipleFoundError(
+                f"Multiple images found with name '{image_identifier}'"
+            )
+        return images[0].url
+
+
+def get_volume_type_url(
+    client: AuthenticatedClient, volume_type_identifier: str
+) -> str:
+    """Get volume type URL from identifier (name or UUID)."""
+    if is_uuid_like(volume_type_identifier):
+        volume_type = openstack_volume_types_retrieve.sync(
+            client=client, uuid=volume_type_identifier
+        )
+        if volume_type is None:
+            raise ObjectNotFoundError(
+                f"Volume type with UUID '{volume_type_identifier}' not found"
+            )
+        return volume_type.url
+    else:
+        volume_types = openstack_volume_types_list.sync(
+            client=client,
+            name_exact=volume_type_identifier,
+        )
+        if not volume_types:
+            raise ObjectNotFoundError(
+                f"Volume type with name '{volume_type_identifier}' not found"
+            )
+        if len(volume_types) > 1:
+            raise ResourceMultipleFoundError(
+                f"Multiple volume types found with name '{volume_type_identifier}'"
+            )
+        return volume_types[0].url
+
+
+def get_security_group_url(
+    client: AuthenticatedClient, security_group_identifier: str, tenant_uuid: str
+):
+    """Get security group URL from identifier (name or UUID)."""
+    if is_uuid_like(security_group_identifier):
+        security_group = openstack_security_groups_retrieve.sync(
+            client=client, uuid=security_group_identifier
+        )
+        if security_group is None:
+            raise ObjectNotFoundError(
+                f"Security group with UUID '{security_group_identifier}' not found"
+            )
+        return security_group.url
+    else:
+        security_groups = openstack_security_groups_list.sync(
+            client=client, name_exact=security_group_identifier, tenant_uuid=tenant_uuid
+        )
+        if not security_groups:
+            raise ObjectNotFoundError(
+                f"Security group with name '{security_group_identifier}' not found"
+            )
+        if len(security_groups) > 1:
+            raise ResourceMultipleFoundError(
+                f"Multiple security groups found with name '{security_group_identifier}'"
+            )
+        return security_groups[0].url
+
+
+def get_server_group_url(
+    client: AuthenticatedClient, server_group_identifier: str, tenant_uuid: str
+):
+    """Get server group URL from identifier (name or UUID)."""
+    if is_uuid_like(server_group_identifier):
+        server_group = openstack_server_groups_retrieve.sync(
+            client=client, uuid=server_group_identifier
+        )
+        if server_group is None:
+            raise ObjectNotFoundError(
+                f"Server group with UUID '{server_group_identifier}' not found"
+            )
+        return server_group.url
+    else:
+        server_groups = openstack_server_groups_list.sync(
+            client=client, name_exact=server_group_identifier, tenant_uuid=tenant_uuid
+        )
+        if not server_groups:
+            raise ObjectNotFoundError(
+                f"Server group with name '{server_group_identifier}' not found"
+            )
+        if len(server_groups) > 1:
+            raise ResourceMultipleFoundError(
+                f"Multiple server groups found with name '{server_group_identifier}'"
+            )
+        return server_groups[0].url
+
+
+def get_ssh_key_url(client: AuthenticatedClient, ssh_key_identifier: str):
+    """Get SSH key URL from identifier (name or UUID)."""
+    if is_uuid_like(ssh_key_identifier):
+        ssh_key = keys_retrieve.sync(client=client, uuid=ssh_key_identifier)
+        if ssh_key is None:
+            raise ObjectNotFoundError(
+                f"SSH key with UUID '{ssh_key_identifier}' not found"
+            )
+        return ssh_key.url
+    else:
+        ssh_keys = keys_list.sync(client=client, name_exact=ssh_key_identifier)
+        if not ssh_keys:
+            raise ObjectNotFoundError(
+                f"SSH key with name '{ssh_key_identifier}' not found"
+            )
+        if len(ssh_keys) > 1:
+            raise ResourceMultipleFoundError(
+                f"Multiple SSH keys found with name '{ssh_key_identifier}'"
+            )
+        return ssh_keys[0].url
+
+
 def send_request_to_waldur(client, module):
     name = module.params["name"]
     project = module.params["project"]
@@ -286,36 +570,49 @@ def send_request_to_waldur(client, module):
 
     instance = None
     has_changed = False
-
     try:
-        instance = client.get_instance_via_marketplace(name, project)
+        resource, instance = get_instance_via_marketplace(client, name, project)
         if not present:
-            if instance["state"] == "OK" and instance["runtime_state"] == "ACTIVE":
-                client.stop_instance(
-                    instance["uuid"],
-                    wait=True,
-                    interval=module.params["interval"],
-                    timeout=module.params["timeout"],
+            if instance.state == CoreStates.OK and instance.runtime_state == "ACTIVE":
+                openstack_instances_stop.sync_detailed(
+                    client=client, uuid=instance.uuid
                 )
-            client.delete_instance_via_marketplace(
-                instance["uuid"],
-                delete_volumes=delete_volumes,
-                release_floating_ips=release_floating_ips,
+                if module.params["wait"]:
+                    wait_for_instance(
+                        client,
+                        instance.uuid,
+                        module.params["interval"],
+                        module.params["timeout"],
+                    )
+            request = ResourceTerminateRequest(
+                attributes={
+                    "delete_volumes": delete_volumes,
+                    "release_floating_ips": release_floating_ips,
+                }
+            )
+            marketplace_resources_terminate.sync(
+                client=client, uuid=resource.uuid, body=request
             )
             has_changed = True
         else:
-            actual_groups = [
-                group["name"] for group in instance.get("security_groups") or []
-            ]
+            actual_groups = [group.name for group in instance.security_groups or []]
             requested_groups = module.params.get("security_groups") or []
             if actual_groups != requested_groups:
-                client.update_instance_security_groups(
-                    instance_uuid=instance["uuid"],
-                    security_groups=requested_groups,
-                    wait=module.params["wait"],
-                    interval=module.params["interval"],
-                    timeout=module.params["timeout"],
+                security_group_request = OpenStackInstanceSecurityGroupsUpdateRequest(
+                    security_groups=requested_groups
                 )
+                openstack_instances_update_security_groups.sync_detailed(
+                    client=client,
+                    uuid=instance.uuid,
+                    body=security_group_request,
+                )
+                if module.params["wait"]:
+                    wait_for_instance(
+                        client,
+                        instance.uuid,
+                        module.params["interval"],
+                        module.params["timeout"],
+                    )
                 has_changed = True
             networks = module.params.get("networks")
             # if update is defined using network syntax, extract expected subnets
@@ -324,17 +621,17 @@ def send_request_to_waldur(client, module):
             if subnet:
                 if not isinstance(subnet, list):
                     subnet = [subnet]
-                instance_subnets = instance.get("ports")
+                instance_subnets = instance.ports
                 needed_update_subnets = False
 
                 for s in instance_subnets:
-                    if not (s["subnet_name"] in subnet or s["subnet_uuid"] in subnet):
+                    if not (s.subnet_name in subnet or s.subnet_uuid in subnet):
                         needed_update_subnets = True
                         break
 
                 if not needed_update_subnets:
-                    instance_subnet_names = {s["subnet_name"] for s in instance_subnets}
-                    instance_subnets_ids = {s["subnet_uuid"] for s in instance_subnets}
+                    instance_subnet_names = {s.subnet_name for s in instance_subnets}
+                    instance_subnets_ids = {s.subnet_uuid for s in instance_subnets}
                     for s in subnet:
                         if not (
                             s in instance_subnet_names or s in instance_subnets_ids
@@ -343,54 +640,119 @@ def send_request_to_waldur(client, module):
                             break
 
                 if needed_update_subnets:
-                    client.update_instance_ports(
-                        instance_uuid=instance["uuid"],
-                        subnet_set=subnet,
-                        wait=True,
-                        interval=module.params["interval"],
-                        timeout=module.params["timeout"],
+                    ports = [
+                        OpenStackNestedPortRequest(subnet=subnet_id)
+                        for subnet_id in subnet
+                    ]
+                    ports_request = OpenStackInstancePortsUpdateRequest(ports=ports)
+                    openstack_instances_update_ports.sync_detailed(
+                        client=client,
+                        uuid=instance.uuid,
+                        body=ports_request,
                     )
+                    if module.params["wait"]:
+                        wait_for_instance(
+                            client,
+                            instance.uuid,
+                            module.params["interval"],
+                            module.params["timeout"],
+                        )
                     has_changed = True
-    except ObjectDoesNotExist:
+    except ObjectNotFoundError as e:
+        if "not found" not in str(e):
+            raise
         if present:
             if isinstance(subnet, list):
                 subnet = subnet[0]
             networks = module.params.get("networks") or [
                 {"subnet": subnet, "floating_ip": module.params.get("floating_ip")}
             ]
+            project_obj = get_project(client, project)
+            offering: PublicOfferingDetails = get_offering(
+                client, module.params["offering"]
+            )
+            attributes = {
+                "name": module.params["name"],
+                "description": module.params.get("description", ""),
+                "user_data": module.params.get("user_data"),
+                "networks": networks,
+            }
+            if module.params.get("flavor"):
+                attributes["flavor"] = get_flavor_url(
+                    client, module.params.get("flavor")
+                )
+            else:
+                if module.params.get("flavor_min_cpu") and module.params.get(
+                    "flavor_min_ram"
+                ):
+                    attributes["flavor"] = get_flavor_url_from_params(
+                        client,
+                        module.params.get("flavor_min_cpu"),
+                        module.params.get("flavor_min_ram"),
+                    )
+                else:
+                    raise ValueError(
+                        "flavor_min_cpu and flavor_min_ram are required if flavor is not provided"
+                    )
+            if module.params.get("image"):
+                attributes["image"] = get_image_url(client, module.params.get("image"))
+            if module.params.get("system_volume_type"):
+                attributes["system_volume_type"] = get_volume_type_url(
+                    client, module.params.get("system_volume_type")
+                )
+            if module.params.get("data_volume_type"):
+                attributes["data_volume_type"] = get_volume_type_url(
+                    client, module.params.get("data_volume_type")
+                )
+            if module.params.get("server_group"):
+                attributes["server_group"] = get_server_group_url(
+                    client, module.params.get("server_group"), project_obj.uuid
+                )
+            if module.params.get("data_volume_size"):
+                attributes["data_volume_size"] = (
+                    module.params.get("data_volume_size") * 1024
+                )
+            if module.params.get("security_groups"):
+                attributes["security_groups"] = module.params.get("security_groups")
+            if module.params.get("ssh_key"):
+                attributes["ssh_key"] = get_ssh_key_url(
+                    client, module.params.get("ssh_key")
+                )
+            if module.params.get("system_volume_size"):
+                attributes["system_volume_size"] = module.params.get(
+                    "system_volume_size"
+                )
 
-            instance = client.create_instance_via_marketplace(
-                name=module.params["name"],
-                description=module.params["description"],
-                offering=module.params["offering"],
-                project=module.params["project"],
-                networks=networks,
-                image=module.params["image"],
-                system_volume_size=module.params["system_volume_size"],
-                security_groups=module.params.get("security_groups"),
-                server_group=module.params.get("server_group"),
-                flavor=module.params.get("flavor"),
-                flavor_min_cpu=module.params.get("flavor_min_cpu"),
-                flavor_min_ram=module.params.get("flavor_min_ram"),
-                data_volume_size=module.params.get("data_volume_size"),
-                ssh_key=module.params.get("ssh_key"),
-                wait=module.params["wait"],
-                interval=module.params["interval"],
-                timeout=module.params["timeout"],
-                user_data=module.params.get("user_data"),
-                tags=module.params.get("tags"),
-                check_mode=module.check_mode,
-                system_volume_type=module.params.get("system_volume_type"),
-                data_volume_type=module.params.get("data_volume_type"),
+            order: OrderCreate = marketplace_orders_create.sync(
+                client=client,
+                body=OrderCreateRequest(
+                    project=project_obj.url,
+                    offering=offering.url,
+                    accepting_terms_of_service=True,
+                    attributes=attributes,
+                ),
+            )
+            marketplace_orders_approve_by_consumer.sync_detailed(
+                client=client, uuid=order.uuid
             )
             has_changed = True
 
+            if module.params["wait"]:
+                # Wait for instance to be created and get it
+                _, instance = get_instance_via_marketplace(client, name, project)
+                if instance:
+                    wait_for_instance(
+                        client,
+                        instance.uuid,
+                        module.params["interval"],
+                        module.params["timeout"],
+                    )
     return instance, has_changed
 
 
 def main():
     module = AnsibleModule(
-        argument_spec=waldur_resource_argument_spec(
+        argument_spec=get_argument_spec(
             data_volume_size=dict(type="int", default=None),
             delete_volumes=dict(type="bool", default=True),
             flavor_min_cpu=dict(type="int", default=None),
@@ -433,10 +795,9 @@ def main():
     system_volume_size = module.params["system_volume_size"]
 
     instance_exists = True
-    client = waldur_client_from_module(module)
-    try:
-        client.get_instance_via_marketplace(name, project)
-    except ObjectDoesNotExist:
+    client = get_client(module)
+    project, os_instance = get_instance_via_marketplace(client, name, project)
+    if not os_instance:
         instance_exists = False
 
     if state == "present" and not instance_exists:
@@ -465,7 +826,12 @@ def main():
             )
     try:
         instance, has_changed = send_request_to_waldur(client, module)
-    except WaldurClientException as e:
+    except (
+        UnexpectedStatus,
+        ObjectNotFoundError,
+        ObjectStateError,
+        ResourceMultipleFoundError,
+    ) as e:
         module.fail_json(msg=str(e))
     else:
         module.exit_json(instance=instance, changed=has_changed)

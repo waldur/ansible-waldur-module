@@ -46,6 +46,9 @@ class TestWaldurMarketplaceOsVolume(unittest.TestCase):
         }
         self.module.check_mode = False
 
+    def tearDown(self):
+        respx.stop()
+
     def test_create_volume(self, mock_ansible_module):
         respx.get(
             "http://example.com:8000/api/openstack-volumes/",

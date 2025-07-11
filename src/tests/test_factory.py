@@ -14,6 +14,7 @@ import json
         models.Project,
         models.OpenStackSecurityGroup,
         models.OpenStackTenant,
+        models.Resource,
         models.ProviderPlanDetails,
         models.PublicOfferingDetails,
         models.OrderCreate,
