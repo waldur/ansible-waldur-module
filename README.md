@@ -7,7 +7,7 @@ management of infrastructure under Waldur through Ansible playbooks.
 
 - OpenStack management.
 - SLURM HPC management
-- Common client for Waldur APIs in Python.
+- Marketplace resource provisioning.
 
 See also: <http://docs.ansible.com/ansible/modules.html>
 
@@ -62,19 +62,18 @@ ansible-playbook \
 ## Contributing
 
 1. See general guidelines: <https://docs.ansible.com/ansible/latest/dev_guide/developing_modules_general.html>
-2. Install `pre-commit` and `tox`
+2. Install `pre-commit`
 
    ```bash
-   pip install tox pre-commit
+   pip install pre-commit
    pre-commit install
    ```
 
-3. When new module is implemented, don't forget to update `py_modules` section in `setup.py` file.
-4. When new module is implemented, it should be covered with tests. Run tests using `tox`
+3. When new module is implemented, it should be covered with tests.
 
    ```bash
-   tox
+   poetry run pytest
    ```
 
-5. Module name should consist of three parts separated by underscore: `waldur`, plugin name,
+4. Module name should consist of three parts separated by underscore: `waldur`, plugin name,
    entity name. For example, `waldur_os_snapshot` refers to OpenStack (OS) as plugin name and snapshot as entity name.
