@@ -32,7 +32,7 @@ Run tests:
     - poetry run pytest -s src/tests/
 
 Upload configuration guide:
-  image: "registry.hpc.ut.ee/mirror/library/python:3.8-buster"
+  image: "registry.hpc.ut.ee/mirror/library/python:3.12-buster"
   stage: deploy
   interruptible: true
   rules:
