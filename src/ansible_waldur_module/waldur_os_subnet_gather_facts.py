@@ -1,9 +1,6 @@
 #!/usr/bin/python
 # has to be a full import due to Ansible 2.0 compatibility
 from ansible.module_utils.basic import AnsibleModule
-from waldur_client import (
-    waldur_full_argument_spec,
-)
 from ansible_waldur_module.utils import get_argument_spec, get_client, is_uuid_like
 from waldur_api_client.api.openstack_subnets import openstack_subnets_list
 from waldur_api_client.api.openstack_subnets import openstack_subnets_retrieve
@@ -24,8 +21,7 @@ description:
   - "Get subnets belonging to an OpenStack tenant"
 requirements:´
   - "python = 3.8"
-  - "requests"
-  - "python-waldur-client"
+  - "waldur-api-client"
 options:
   access_token:
     description:
@@ -89,10 +85,10 @@ def send_request_to_waldur(client, module):
 
 
 def main():
-    fields = waldur_full_argument_spec(
-        subnet_uuid=dict(required=False, type="str"),
-        tenant_uuid=dict(required=True, type="str"),
-    )
+    fields = {
+        "subnet_uuid": dict(required=False, type="str"),
+        "tenant_uuid": dict(required=True, type="str"),
+    }
     module = AnsibleModule(get_argument_spec(**fields))
     client = get_client(module)
 

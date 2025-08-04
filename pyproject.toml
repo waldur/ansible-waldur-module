@@ -23,13 +23,10 @@ classifiers = [
 [tool.poetry.dependencies]
 ansible-core = ">=2.11.0"
 python = ">=3.9,<4.0"
-requests = ">=2.6.0"
-python-waldur-client = ">=0.6.2"
 urllib3 = ">=2.0.0,<3.0.0"
 waldur-api-client = "0.2.0"
 
 [tool.poetry.group.dev.dependencies]
-responses = ">=0.5.0"
 pre-commit = "^4.2.0"
 
 [tool.poetry.group.test.dependencies]

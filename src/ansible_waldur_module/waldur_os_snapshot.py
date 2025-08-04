@@ -33,8 +33,7 @@ description:
   - "Create/Delete OpenStack snapshot"
 requirements:
   - "python = 3.8"
-  - "requests"
-  - "python-waldur-client"
+  - "waldur-api-client"
 options:
   access_token:
     description:
