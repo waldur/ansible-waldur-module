@@ -6,7 +6,6 @@ management of infrastructure under Waldur through Ansible playbooks.
 ## Supported functionality
 
 - OpenStack management.
-- SLURM HPC management
 - Marketplace resource provisioning.
 
 See also: <http://docs.ansible.com/ansible/modules.html>

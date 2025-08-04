@@ -27,8 +27,7 @@ description:
   - Get an OpenStack instance
 requirements:
   - python = 3.8
-  - requests
-  - python-waldur-client
+  - waldur-api-client
 options:
   access_token:
     description:
