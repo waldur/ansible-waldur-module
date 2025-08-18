@@ -752,6 +752,8 @@ def send_request_to_waldur(client, module):
 def main():
     module = AnsibleModule(
         argument_spec=get_argument_spec(
+            name=dict(type="str", required=True),
+            state=dict(type="str", choices=["present", "absent"], default="present"),
             data_volume_size=dict(type="int", default=None),
             delete_volumes=dict(type="bool", default=True),
             flavor_min_cpu=dict(type="int", default=None),
@@ -795,8 +797,9 @@ def main():
 
     instance_exists = True
     client = get_client(module)
-    project, os_instance = get_instance_via_marketplace(client, name, project)
-    if not os_instance:
+    try:
+        project, os_instance = get_instance_via_marketplace(client, name, project)
+    except ObjectNotFoundError:
         instance_exists = False
 
     if state == "present" and not instance_exists:
